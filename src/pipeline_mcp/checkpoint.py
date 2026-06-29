@@ -1,0 +1,127 @@
+"""Checkpointowanie plikowe YAML."""
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+
+import yaml
+
+from .config import get_config
+from .envelope import serialize_envelope, deserialize_envelope
+from .models import CheckpointNotFoundError, Envelope
+
+
+def save_checkpoint(
+    run_id: str, station: str, envelope: Envelope, suffix: str = "",
+    workspace: str | None = None,
+) -> str:
+    """Zapisuje koperte do pliku checkpointu."""
+    config = get_config()
+    checkpoint_path = config.checkpoint_path(run_id, station, suffix, workspace)
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Dodaj metadane checkpointu
+    data = envelope.model_dump()
+    data["_checkpoint"] = {
+        "station": station,
+        "suffix": suffix,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    with open(checkpoint_path, "w", encoding="utf-8") as f:
+        yaml.dump(
+            data,
+            f,
+            allow_unicode=True,
+            default_flow_style=False,
+            sort_keys=False,
+        )
+
+    return str(checkpoint_path)
+
+
+def load_checkpoint(
+    run_id: str, station: str, suffix: str = "", workspace: str | None = None,
+) -> Envelope:
+    """Odczytuje koperte z pliku checkpointu."""
+    config = get_config()
+    checkpoint_path = config.checkpoint_path(run_id, station, suffix, workspace)
+
+    if not checkpoint_path.exists():
+        raise CheckpointNotFoundError(
+            f"Checkpoint nie istnieje: {checkpoint_path}"
+        )
+
+    with open(checkpoint_path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    # Usun metadane checkpointu przed rekonstrukcja Envelope
+    data.pop("_checkpoint", None)
+
+    return Envelope(**data)
+
+
+def list_checkpoints(run_id: str, workspace: str | None = None) -> list[dict]:
+    """Lista wszystkich checkpointow dla run'u."""
+    config = get_config()
+    run_dir = config.run_dir(run_id, workspace)
+
+    if not run_dir.exists():
+        return []
+
+    checkpoints = []
+    for f in sorted(run_dir.glob("stan_*.yaml")):
+        stat = f.stat()
+        # Parsuj nazwe pliku: stan_<station><suffix>.yaml
+        name = f.stem  # np. stan_inicjuj lub stan_dobierz_iter1
+        parts = name.replace("stan_", "", 1)
+
+        # Rozdziel station i suffix
+        if "_iter" in parts:
+            station, iter_part = parts.rsplit("_iter", 1)
+            suffix = f"_iter{iter_part}"
+        else:
+            station = parts
+            suffix = ""
+
+        checkpoints.append({
+            "station": station,
+            "checkpoint_path": str(f),
+            "timestamp": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "suffix": suffix,
+            "size_bytes": stat.st_size,
+        })
+
+    return checkpoints
+
+
+def get_latest_checkpoint(
+    run_id: str, workspace: str | None = None,
+) -> tuple[str, Envelope] | None:
+    """Zwraca ostatni checkpoint (stacja, koperta). None jesli brak."""
+    checkpoints = list_checkpoints(run_id, workspace)
+    if not checkpoints:
+        return None
+
+    # Filtruj checkpointy bez suffixu (główne, nie iteracyjne)
+    main_checkpoints = [c for c in checkpoints if not c["suffix"]]
+    if not main_checkpoints:
+        main_checkpoints = checkpoints
+
+    latest = main_checkpoints[-1]
+    envelope = load_checkpoint(run_id, latest["station"], latest["suffix"], workspace)
+    return latest["station"], envelope
+
+
+def save_envelope_final(
+    run_id: str, envelope: Envelope, workspace: str | None = None,
+) -> str:
+    """Zapisuje ostateczna koperte po zamknieciu run'u."""
+    config = get_config()
+    path = config.envelope_final_path(run_id, workspace)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(serialize_envelope(envelope))
+
+    return str(path)
