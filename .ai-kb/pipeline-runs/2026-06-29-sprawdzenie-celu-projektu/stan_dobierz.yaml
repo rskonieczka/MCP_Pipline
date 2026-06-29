@@ -1,0 +1,268 @@
+run_id: 2026-06-29-sprawdzenie-celu-projektu
+sciezka: doglebny
+stacja_aktualna: dobierz
+stacja_poprzednia: zmienne
+stan:
+  zamiar: Sprawdzenie celu projektu Pipeline MCP Server, ktorym jest orkiestracja
+    agentow AI w petli pipeline
+  klasyfikacja: zlozone
+  punkt_wejscia: zmienne
+pola_stacji:
+  inicjuj:
+    klasyfikacja: zlozone
+    punkt_wejscia: zmienne
+    uzasadnienie: 'Zadanie audytowe: weryfikacja czy projekt realizuje deklarowany
+      cel (orkiestracja agentow AI w petli pipeline). 3+ podproblemow: zrozumienie
+      celu, weryfikacja implementacji, audyt zgodnosci cel-implementacja, ewaluacja
+      ex-post. Wymaga zrodel (kod, .ai-kb, docs), weryfikacji, dekompozycji i ewaluacji.'
+    ryzyka:
+    - Bledne rozpoznanie jako rutynowe - pominiecie ewaluacji ex-post i dekompozycji
+    - Zakladanie ze cel jest realizowany bez weryfikacji kodu
+    - Konflikt miedzy deklaracja w .ai-kb a rzeczywista implementacja
+  zmienne:
+    analysis_object:
+      object_id: OBJ-001
+      object_type: project
+      name: Pipeline MCP Server
+      description: Samodzielny serwer MCP orkiestrujacy dzialanie agentow AI w petli
+        pipeline. Materializuje skille 13 stacji jako wbudowane zasoby pakietu, zarzadza
+        stanem run'u, waliduje kontrakty, prowadzi przez sciezki, obsluguje bramke
+        jakosci, checkpointuje i integruje z Memgraph.
+      URL: ''
+      primary_goal: Orkiestracja agentow AI w petli pipeline przez 13 stacji i 3 sciezki
+        (szybki/pelny/doglebny)
+      expected_result: Self-contained serwer MCP prowadzacy agenta przez stacje pipeline'u
+        z persystencja stanu i audytowalnoscia
+      audience_or_user: Agent AI (Devin/Windsurf) w VSCode, polaczenie stdio
+      domain: MCP/AI orchestration
+      region_or_scope: lokalne
+      offer_status: existing
+      constraints:
+      - Python 3.11+, FastMCP
+      - stdio MCP
+      - persystencja YAML
+      - opcjonalny Memgraph
+      source_type: verified_source
+      confidence_score: 95
+    operation_mode: audit
+    variables:
+    - id: V001
+      name: cel_projektu
+      value: Orkiestracja agentow AI w petli pipeline
+      variable_type: fact
+      source_type: verified_source
+      source_reference: .ai-kb/00-overview.md, docs/01-architecture.md
+    - id: V002
+      name: liczba_stacji
+      value: 13
+      variable_type: fact
+      source_type: verified_source
+      source_reference: src/pipeline_mcp/stations.py (14 StationDef = 13 stacji +
+        audyt_runu)
+    - id: V003
+      name: liczba_narzedzi_mcp
+      value: 22
+      variable_type: fact
+      source_type: verified_source
+      source_reference: grep -c '@mcp.tool' server.py
+    - id: V004
+      name: liczba_skilli
+      value: 14
+      variable_type: fact
+      source_type: verified_source
+      source_reference: ls src/pipeline_mcp/skills/
+    - id: V005
+      name: liczba_modulow_python
+      value: 16
+      variable_type: fact
+      source_type: verified_source
+      source_reference: find src/pipeline_mcp -name '*.py'
+    - id: V006
+      name: sciezki_pipeline
+      value:
+      - szybki(5)
+      - pelny(9)
+      - doglebny(13)
+      variable_type: fact
+      source_type: verified_source
+      source_reference: docs/04-paths-and-routing.md, routing.py
+    - id: V007
+      name: bramka_jakosci
+      value: max 2 iteracje, eskalacja do uzytkownika
+      variable_type: fact
+      source_type: verified_source
+      source_reference: quality_gate.py, docs/05-quality-gate.md
+    - id: V008
+      name: tryb_orkiestracji
+      value: hybrydowy (manual + auto-pilot)
+      variable_type: fact
+      source_type: verified_source
+      source_reference: auto_pilot.py, .ai-kb/02-decisions-and-pitfalls.md D2
+    - id: V009
+      name: persystencja
+      value: YAML w .ai-kb/pipeline-runs/
+      variable_type: fact
+      source_type: verified_source
+      source_reference: checkpoint.py, manifest.py
+    - id: V010
+      name: hipoteza_cel_realizowany
+      value: Projekt realizuje deklarowany cel orkiestracji agentow AI w petli pipeline
+      variable_type: hypothesis
+      source_type: agent_inference
+      source_reference: wymaga weryfikacji w stacji weryfikacja/sprawdzenie
+    - id: V011
+      name: kryterium_sukcesu_audytu
+      value: 'Implementacja kodu pokrywa wszystkie deklarowane komponenty celu: stacje,
+        sciezki, bramke, persystencje, orkiestracje'
+      variable_type: requirement
+      source_type: agent_inference
+    - id: V012
+      name: ryzyko_rozjazdu_deklaracja_implementacja
+      value: Mozliwe rozbieznosci miedzy .ai-kb/docs a kodem (np. liczba modulow 16
+        vs 17 plikow .py)
+      variable_type: risk
+      source_type: agent_inference
+    relations:
+    - source: V010
+      target: V001
+      type: zalezy_od
+    - source: V011
+      target: V002
+      type: weryfikuje_przez
+    - source: V011
+      target: V003
+      type: weryfikuje_przez
+    - source: V012
+      target: V010
+      type: obsluzy_przez
+    - source: V008
+      target: V001
+      type: realizuje
+    sources_used:
+    - source: .ai-kb/00-overview.md
+      type: project_kb
+      scope: cel, status, decyzje
+    - source: .ai-kb/02-decisions-and-pitfalls.md
+      type: project_kb
+      scope: decyzje architektoniczne D1-D8, pulapki P1-P6
+    - source: docs/01-architecture.md
+      type: project_docs
+      scope: architektura, komponenty, zasady projektowe
+    - source: src/pipeline_mcp/server.py
+      type: source_code
+      scope: 22 narzedzi MCP
+    - source: src/pipeline_mcp/stations.py
+      type: source_code
+      scope: 14 StationDef
+    - source: src/pipeline_mcp/skills/
+      type: source_code
+      scope: 14 wbudowanych skilli
+    missing_data_resolution:
+      user_was_asked: false
+      user_allowed_self_research: true
+      allowed_sources:
+      - project_files
+      - source_code
+      - official_documentation
+      fallback_when_denied: mark_as_unavailable
+  dobierz:
+    status_doboru: rozstrzygniety
+    metoda_doboru: kryterialny + zrodlowy (hybrydowy)
+    warianty:
+    - id: W1
+      nazwa: Inspekcja kodu zrodlowego (grep/read)
+      opis: Bezposrednie wczytanie modulow Python i weryfikacja deklarowanych komponentow
+      dopasowanie: wysokie
+    - id: W2
+      nazwa: Uruchomienie serwera i testy funkcjonalne narzedzi MCP
+      opis: Start serwera, wywolanie narzedzi, sprawdzenie odpowiedzi
+      dopasowanie: wysokie
+    - id: W3
+      nazwa: Weryfikacja integralnosci skilli (verify_skills_integrity)
+      opis: Wbudowane narzedzie serwera do sprawdzania spojnosci skilli
+      dopasowanie: wysokie
+    - id: W4
+      nazwa: Porownanie .ai-kb/docs z kodem (audyt zgodnosci dokumentacji)
+      opis: Sprawdzenie czy deklaracje w bazie wiedzy odpowiadaja implementacji
+      dopasowanie: wysokie
+    - id: W5
+      nazwa: Analiza grafu zaleznosci przez Memgraph
+      opis: Zapis relacji run'u i audyt ciaglosci grafu
+      dopasowanie: srednie (opcjonalne, wymaga uruchomionego Memgraph)
+    kryteria:
+    - nazwa: Pokrycie celu (orkiestracja agentow AI w petli pipeline)
+      waga: wysoka
+      kryterium: Metoda weryfikuje wszystkie deklarowane komponenty celu
+    - nazwa: Wiarygodnosc zrodlowa
+      waga: wysoka
+      kryterium: Metoda opiera sie na kodzie zrodlowym lub wbudowanych narzedziach
+        serwera
+    - nazwa: Powtarzalnosc
+      waga: srednia
+      kryterium: Metoda daje deterministyczny wynik
+    - nazwa: Niski koszt
+      waga: srednia
+      kryterium: Metoda nie wymaga zewnetrznych serwisow (Memgraph, LLM API)
+    porownanie: W1 (inspekcja kodu) - pokrycie wysokie, wiarygodnosc wysoka (kod =
+      zrodlo prawdy), powtarzalnosc wysoka, koszt niski. W2 (testy funkcjonalne) -
+      pokrycie wysokie, wiarygodnosc wysokie (realne dzialanie), powtarzalnosc wysoka,
+      koszt niski (lokalne). W3 (verify_skills_integrity) - pokrycie srednie (tylko
+      skille), wiarygodnosc wysokie (wbudowane), powtarzalnosc wysoka, koszt niski.
+      W4 (audyt zgodnosci docs) - pokrycie wysokie (deklaracja vs implementacja),
+      wiarygodnosc wysoka, powtarzalnosc wysoka, koszt niski. W5 (Memgraph) - pokrycie
+      srednie (relacje), wiarygodnosc wysokie, powtarzalnosc wysoka, koszt sredni
+      (wymaga Memgraph).
+    rekomendacja:
+      glowna: W1 + W2 + W4 (inspekcja kodu + testy funkcjonalne + audyt zgodnosci
+        docs) - kombinacja daje pelne pokrycie celu bez zewnetrznych zaleznosci
+      rezerwowa: W1 + W3 + W4 (bez uruchamiania serwera, tylko inspekcja statyczna)
+        - gdy uruchomienie serwera niemozliwe
+      uzasadnienie: W1 daje wiarygodnosc zrodlowa (kod = zrodlo prawdy implementacyjnej),
+        W2 potwierdza realne dzialanie orkiestracji, W4 weryfikuje zgodnosc deklaracji
+        z implementacja. Wszystkie metody lokalne, niskokosztowe, powtarzalne. W5
+        pomijam jako opcjonalne (Memgraph nie jest wymagany do celu orkiestracji).
+    ryzyka_i_warunki_rewizji:
+      ryzyka:
+      - Inspekcja kodu moze pominac bledy runtime niewidoczne w statycznym odczycie
+      - Testy funkcjonalne wymagaja dzialajacego srodowiska (.venv)
+      - Audyt zgodnosci docs zalezy od kompletnosci .ai-kb
+      warunki_rewizji:
+      - Jesli inspekcja kodu wykazuje rozjazd z deklaracja - przejsc do W2 dla potwierdzenia
+      - Jesli testy funkcjonalne zawioda - przejsc do debugingu konkretnego narzedzia
+    najblizszy_krok: Przejscie do stacji routing w celu ustalenia sciezki weryfikacji,
+      nastepnie planuj z wybranymi metodami W1+W2+W4
+walidacja:
+  stacja_docelowa: routing
+  pola_wymagane:
+  - ZAMIAR_LUB_PROBLEM
+  pola_obecne:
+  - ZAMIAR_LUB_PROBLEM
+  pola_brakujace: []
+  status: gotowy
+  akcja_naprawcza: ''
+relacje:
+- zrodlo: run:2026-06-29-sprawdzenie-celu-projektu
+  cel: stacja:inicjuj
+  typ: zawiera
+  pola: []
+- zrodlo: run:2026-06-29-sprawdzenie-celu-projektu
+  cel: stacja:zmienne
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:inicjuj
+  cel: stacja:zmienne
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-06-29-sprawdzenie-celu-projektu
+  cel: stacja:dobierz
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:zmienne
+  cel: stacja:dobierz
+  typ: nastapila_po
+  pola: []
+timestamp: '2026-06-29T19:57:49.971978'
+_checkpoint:
+  station: dobierz
+  suffix: ''
+  timestamp: '2026-06-29T19:57:49.972274'

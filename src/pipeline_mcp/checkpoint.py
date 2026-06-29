@@ -98,16 +98,36 @@ def list_checkpoints(run_id: str, workspace: str | None = None) -> list[dict]:
 def get_latest_checkpoint(
     run_id: str, workspace: str | None = None,
 ) -> tuple[str, Envelope] | None:
-    """Zwraca ostatni checkpoint (stacja, koperta). None jesli brak."""
+    """Zwraca ostatni checkpoint (stacja, koperta). None jesli brak.
+
+    Uzywa manifestu do ustalenia ostatniej zakonczonej stacji (chronologicznie),
+    nie sortowania alfabetycznego nazw plikow.
+    """
+    from .manifest import load_manifest
+    config = get_config()
+    manifest_path = config.manifest_path(run_id, workspace)
+
+    if manifest_path.exists():
+        manifest = load_manifest(manifest_path)
+        # Szukaj ostatniej zakonczonej stacji z checkpointem na dysku
+        for s in reversed(manifest.stacje):
+            if s.status == "zakonczona" and s.checkpoint:
+                cp_path = Path(s.checkpoint)
+                if cp_path.exists():
+                    envelope = load_checkpoint(run_id, s.stacja, "", workspace)
+                    return s.stacja, envelope
+
+    # Fallback: sortuj po timestamp pliku (mtime)
     checkpoints = list_checkpoints(run_id, workspace)
     if not checkpoints:
         return None
 
-    # Filtruj checkpointy bez suffixu (główne, nie iteracyjne)
     main_checkpoints = [c for c in checkpoints if not c["suffix"]]
     if not main_checkpoints:
         main_checkpoints = checkpoints
 
+    # Sortuj po timestamp (mtime), nie po nazwie pliku
+    main_checkpoints.sort(key=lambda c: c["timestamp"])
     latest = main_checkpoints[-1]
     envelope = load_checkpoint(run_id, latest["station"], latest["suffix"], workspace)
     return latest["station"], envelope

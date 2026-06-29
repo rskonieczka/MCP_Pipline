@@ -36,6 +36,18 @@
 
 **Dlaczego**: Agent (Devin/Windsurf) dziala lokalnie w VSCode. Serwer uruchamiany przez uvx lub python -m, polaczenie stdio. Zadnych zdalnych serwisow poza opcjonalnym Memgraph i API LLM.
 
+### D7: PIPELINE_RUNS_DIR wzgledne wzgledem workspace
+
+**Dlaczego**: Serwer ma dzialac dla wielu projektow. `PIPELINE_RUNS_DIR=.ai-kb/pipeline-runs` (wzgledna) rozwiazywana wzgledem `os.getcwd()` (workspace). Dodatkowo kazde narzedzie MCP ma opcjonalny parametr `workspace` do nadpisania. Brak `cwd` w konfiguracji MCP - Windsurf ustawia cwd na workspace automatycznie.
+
+**Alternatywy odrzucone**: Sztywna sciezka absolutna (jedna per serwer - nie obsluguje wielu projektow), zmienna srodowiskowa per workspace (wymaga restartu serwera przy zmianie projektu).
+
+### D8: Auto-inicjalizacja przez prompt MCP
+
+**Dlaczego**: Uzytkownik nie musi jawnie wywolywac `start_run`. Serwer udostepnia prompt MCP `pipeline_start`, ktory automatycznie wywoluje `start_run` i zwraca instrukcje do pierwszej stacji. Drugi prompt `pipeline_continue` wznawia istniejacy run. Dodatkowo serwer wysyla `instructions` do agenta przy polaczeniu, ktore opisuja jak uzywac pipeline'u.
+
+**Alternatywy odrzucone**: Lifespan hook (brak zamiaru przy starcie serwera), auto-run w execute_station (zamiar niejawny, trudny do audytu), instrukcje bez promptu (agent nadal musi jawnie wywolywac start_run).
+
 ## Pułapki
 
 ### P1: Aktualizacja skilli wymaga aktualizacji pakietu

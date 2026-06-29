@@ -1,0 +1,40 @@
+run_id: 2026-06-29-sprawdzenie-celu-projektu
+sciezka: doglebny
+stacja_aktualna: inicjuj
+stacja_poprzednia: ''
+stan:
+  zamiar: Sprawdzenie celu projektu Pipeline MCP Server, ktorym jest orkiestracja
+    agentow AI w petli pipeline
+  klasyfikacja: zlozone
+  punkt_wejscia: zmienne
+pola_stacji:
+  inicjuj:
+    klasyfikacja: zlozone
+    punkt_wejscia: zmienne
+    uzasadnienie: 'Zadanie audytowe: weryfikacja czy projekt realizuje deklarowany
+      cel (orkiestracja agentow AI w petli pipeline). 3+ podproblemow: zrozumienie
+      celu, weryfikacja implementacji, audyt zgodnosci cel-implementacja, ewaluacja
+      ex-post. Wymaga zrodel (kod, .ai-kb, docs), weryfikacji, dekompozycji i ewaluacji.'
+    ryzyka:
+    - Bledne rozpoznanie jako rutynowe - pominiecie ewaluacji ex-post i dekompozycji
+    - Zakladanie ze cel jest realizowany bez weryfikacji kodu
+    - Konflikt miedzy deklaracja w .ai-kb a rzeczywista implementacja
+walidacja:
+  stacja_docelowa: zmienne
+  pola_wymagane:
+  - task_goal
+  pola_obecne:
+  - task_goal
+  pola_brakujace: []
+  status: gotowy
+  akcja_naprawcza: ''
+relacje:
+- zrodlo: run:2026-06-29-sprawdzenie-celu-projektu
+  cel: stacja:inicjuj
+  typ: zawiera
+  pola: []
+timestamp: '2026-06-29T19:55:34.204904'
+_checkpoint:
+  station: inicjuj
+  suffix: ''
+  timestamp: '2026-06-29T19:55:34.205113'

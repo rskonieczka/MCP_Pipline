@@ -1,0 +1,12 @@
+run_id: 2026-06-29-test-default
+zamiar: Test default
+sciezka: pelny
+iteracja_bramki: 0
+status_runu: w_trakcie
+timestamp_start: '2026-06-29T18:24:38.337242'
+timestamp_end: null
+stacje:
+- stacja: inicjuj
+  status: w_trakcie
+  timestamp: null
+  checkpoint: null

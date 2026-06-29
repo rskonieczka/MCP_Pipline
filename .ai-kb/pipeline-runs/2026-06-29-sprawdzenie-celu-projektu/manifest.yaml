@@ -1,0 +1,61 @@
+run_id: 2026-06-29-sprawdzenie-celu-projektu
+zamiar: Sprawdzenie celu projektu Pipeline MCP Server, ktorym jest orkiestracja agentow
+  AI w petli pipeline
+sciezka: doglebny
+iteracja_bramki: 0
+status_runu: zakonczony
+timestamp_start: '2026-06-29T19:54:55.669467'
+timestamp_end: '2026-06-29T20:04:10.996571'
+stacje:
+- stacja: inicjuj
+  status: zakonczona
+  timestamp: '2026-06-29T19:55:34.206746'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_inicjuj.yaml
+- stacja: zmienne
+  status: zakonczona
+  timestamp: '2026-06-29T19:56:22.221089'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_zmienne.yaml
+- stacja: analiza
+  status: zakonczona
+  timestamp: '2026-06-29T19:57:06.315386'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_analiza.yaml
+- stacja: dekompozycja
+  status: zakonczona
+  timestamp: '2026-06-29T19:57:20.579998'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_dekompozycja.yaml
+- stacja: dobierz
+  status: zakonczona
+  timestamp: '2026-06-29T19:57:49.980517'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_dobierz.yaml
+- stacja: routing
+  status: zakonczona
+  timestamp: '2026-06-29T19:57:58.105266'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_routing.yaml
+- stacja: planuj
+  status: zakonczona
+  timestamp: '2026-06-29T19:58:25.666011'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_planuj.yaml
+- stacja: realizuj
+  status: zakonczona
+  timestamp: '2026-06-29T20:00:33.639959'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_realizuj.yaml
+- stacja: weryfikacja
+  status: zakonczona
+  timestamp: '2026-06-29T20:01:22.411236'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_weryfikacja.yaml
+- stacja: sprawdzenie
+  status: zakonczona
+  timestamp: '2026-06-29T20:02:19.615621'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_sprawdzenie.yaml
+- stacja: ewaluacja
+  status: zakonczona
+  timestamp: '2026-06-29T20:02:58.918100'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_ewaluacja.yaml
+- stacja: utrwal
+  status: zakonczona
+  timestamp: '2026-06-29T20:03:38.139846'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_utrwal.yaml
+- stacja: monitoruj
+  status: zakonczona
+  timestamp: '2026-06-29T20:04:08.920122'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-06-29-sprawdzenie-celu-projektu/stan_monitoruj.yaml

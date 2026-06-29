@@ -56,17 +56,24 @@ def is_available() -> bool:
 
 
 def write_run_node(run_id: str, zamiar: str, sciezka: str) -> bool:
-    """Zapisuje wezel Run do Memgraph."""
+    """Zapisuje wezel Run do Memgraph.
+
+    Uzywa konwencji id='run:<run_id>' spojnej z write_relation,
+    aby relacje i wezly strukturalne wskazywaly na ten sam wezel.
+    """
     driver = _get_driver()
     if driver is None:
         return False
 
     try:
+        run_node_id = f"run:{run_id}"
         with driver.session() as session:
             session.run(
-                "CREATE (r:Run {run_id: $run_id, zamiar: $zamiar, "
-                "sciezka: $sciezka, status: 'w_trakcie'})",
-                run_id=run_id, zamiar=zamiar, sciezka=sciezka,
+                "MERGE (r:Run {id: $run_node_id}) "
+                "SET r.run_id = $run_id, r.zamiar = $zamiar, "
+                "r.sciezka = $sciezka, r.status = 'w_trakcie'",
+                run_node_id=run_node_id, run_id=run_id,
+                zamiar=zamiar, sciezka=sciezka,
             )
         return True
     except Exception as e:
@@ -77,17 +84,24 @@ def write_run_node(run_id: str, zamiar: str, sciezka: str) -> bool:
 def write_station_node(
     run_id: str, station: str, status: str, checkpoint: str = ""
 ) -> bool:
-    """Zapisuje wezel Stacja do Memgraph."""
+    """Zapisuje wezel Stacja do Memgraph.
+
+    Uzywa konwencji id='stacja:<name>' spojnej z write_relation,
+    aby relacje i wezly strukturalne wskazywaly na ten sam wezel.
+    """
     driver = _get_driver()
     if driver is None:
         return False
 
     try:
+        station_id = f"stacja:{station}"
         with driver.session() as session:
             session.run(
-                "CREATE (s:Stacja {run_id: $run_id, stacja: $station, "
-                "status: $status, checkpoint: $checkpoint})",
-                run_id=run_id, station=station, status=status, checkpoint=checkpoint,
+                "MERGE (s:Stacja {id: $station_id}) "
+                "SET s.run_id = $run_id, s.stacja = $station, "
+                "s.status = $status, s.checkpoint = $checkpoint",
+                station_id=station_id, run_id=run_id,
+                station=station, status=status, checkpoint=checkpoint,
             )
         return True
     except Exception as e:
@@ -98,24 +112,52 @@ def write_station_node(
 def write_relation(
     source: str, target: str, rel_type: str, fields: list[str] | None = None
 ) -> bool:
-    """Zapisuje krawedz miedzy wezlami."""
+    """Zapisuje krawedz miedzy wezlami.
+
+    Nadaje labeli wezlom na podstawie konwencji id:
+    - 'run:*' -> label :Run
+    - 'stacja:*' -> label :Stacja
+    Pozostale wezly pozostaja generyczne (bez dodatkowego labela).
+    Uzywa MERGE dla relacji aby uniknac duplikacji.
+    """
     driver = _get_driver()
     if driver is None:
         return False
 
     try:
         rel_type_safe = rel_type.upper().replace("-", "_")
+        # Okresl labeli na podstawie konwencji id
+        source_label = _label_for_id(source)
+        target_label = _label_for_id(target)
+
         with driver.session() as session:
-            # Szukaj wezlow po id (konwencja: stacja:<name>, run:<id>, zmienna:<id>)
+            # MERGE wezlow z opcjonalnymi labelami i id
+            source_clause = (
+                f"MERGE (a:{source_label} {{id: $source}})"
+                if source_label else "MERGE (a {{id: $source}})"
+            )
+            target_clause = (
+                f"MERGE (b:{target_label} {{id: $target}})"
+                if target_label else "MERGE (b {{id: $target}})"
+            )
             session.run(
-                f"MERGE (a {{id: $source}}) MERGE (b {{id: $target}}) "
-                f"CREATE (a)-[:{rel_type_safe}]->(b)",
+                f"{source_clause} {target_clause} "
+                f"MERGE (a)-[:{rel_type_safe}]->(b)",
                 source=source, target=target,
             )
         return True
     except Exception as e:
         logger.warning(f"Blad zapisu relacji {source}->{target}: {e}")
         return False
+
+
+def _label_for_id(node_id: str) -> str:
+    """Zwraca label dla wezla na podstawie konwencji id."""
+    if node_id.startswith("run:"):
+        return "Run"
+    if node_id.startswith("stacja:"):
+        return "Stacja"
+    return ""
 
 
 def write_relations_from_envelope(run_id: str, envelope: Envelope) -> bool:
@@ -133,17 +175,18 @@ def write_relations_from_envelope(run_id: str, envelope: Envelope) -> bool:
 
 
 def close_run_node(run_id: str) -> bool:
-    """Oznacza wezel Run jako zakonczony."""
+    """Oznacza wezel Run jako zakonczony. Tworzy wezel jesli nie istnieje."""
     driver = _get_driver()
     if driver is None:
         return False
 
     try:
+        run_node_id = f"run:{run_id}"
         with driver.session() as session:
             session.run(
-                "MATCH (r:Run {run_id: $run_id}) "
+                "MERGE (r:Run {id: $run_node_id}) "
                 "SET r.status = 'zakonczony'",
-                run_id=run_id,
+                run_node_id=run_node_id,
             )
         return True
     except Exception as e:
