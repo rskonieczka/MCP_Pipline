@@ -46,20 +46,25 @@ def add_station_relations(
     envelope: Envelope, station: str, run_id: str
 ) -> Envelope:
     """Dodaje relacje standardowe dla stacji (nastapila_po, zawiera)."""
-    # Relacja: run -> stacja (zawiera)
-    envelope.relacje.append(Relacja(
+    # Relacja: run -> stacja (zawiera) - deduplikacja
+    zawiera = Relacja(
         zrodlo=f"run:{run_id}",
         cel=f"stacja:{station}",
         typ="zawiera",
-    ))
+    )
+    if zawiera not in envelope.relacje:
+        envelope.relacje.append(zawiera)
 
-    # Relacja: stacja_poprzednia -> stacja_aktualna (nastapila_po)
+    # Relacja: stacja_aktualna -> stacja_poprzednia (nastapila_po)
+    # Kierunek: aktualna stacja wskazuje na swoją poprzednią
     if envelope.stacja_poprzednia:
-        envelope.relacje.append(Relacja(
-            zrodlo=f"stacja:{envelope.stacja_poprzednia}",
-            cel=f"stacja:{station}",
+        nastapila = Relacja(
+            zrodlo=f"stacja:{station}",
+            cel=f"stacja:{envelope.stacja_poprzednia}",
             typ="nastapila_po",
-        ))
+        )
+        if nastapila not in envelope.relacje:
+            envelope.relacje.append(nastapila)
 
     return envelope
 

@@ -1,0 +1,402 @@
+run_id: 2026-07-01-analiza-projektu-i
+sciezka: doglebny
+stacja_aktualna: zmienne
+stacja_poprzednia: inicjuj
+stan:
+  zamiar: Analiza projektu i propozycje 3 funkcjonalnosci zwiekszajacych efektywnosc
+    MCP
+  klasyfikacja: zlozone
+  punkt_wejscia: zmienne
+pola_stacji:
+  inicjuj:
+    klasyfikacja: zlozone
+    punkt_wejscia: zmienne
+    ryzyka:
+    - Ryzyko powierzchownej analizy - brak glebokiego zrozumienia architektury
+    - Ryzyko propozycji nieadekwatnych do realnych potrzeb uzytkownika
+    - Ryzyko pominiencia krytycznych luk przez ograniczenia kontekstu
+    uzasadnienie: 'Zadanie wymaga analizy 16 modulow Python, zrozumienia architektury
+      13-stacyjnego pipeline''u, identyfikacji luk efektywnosciowych i syntezy 3 propozycji.
+      3+ podproblemow: (1) analiza kodu, (2) identyfikacja luk, (3) propozycje usprawnien.
+      Wymaga zrodel zewnetrznych (kod projektu), weryfikacji i dekompozycji.'
+  zmienne:
+    analysis_object:
+      URL: ''
+      audience_or_user: Developer uzytkujacy pipeline MCP w VSCode
+      case_studies: []
+      certificates: []
+      confidence_score: 95
+      constraints:
+      - Python 3.11+
+      - FastMCP framework
+      - Persystencja YAML
+      - Lokalne dzialanie stdio
+      current_clients: []
+      description: Samodzielny serwer MCP orkiestrujacy dzialanie agentow AI przez
+        13 stacji w petli pipeline
+      domain: AI/MCP infrastructure
+      expected_result: 3 propozycje funkcjonalnosci zwiekszajacych efektywnosc serwera
+        MCP
+      implementation_period: ''
+      known_competitors: []
+      name: Pipeline MCP Server
+      object_id: AO001
+      object_type: codebase
+      offer_status: existing
+      payment_model: ''
+      primary_goal: Zmaterializowanie pipeline'u umiejetnosci jako infrastruktury
+        operacyjnej z trwalym stanem, walidacja kontraktow, bramka jakosci, 3 sciezkami
+        routing'u i opcjonalnym auto-pilotem
+      region_or_scope: lokalne
+      sales_model: ''
+      source_type: verified_source
+    missing_data_resolution:
+      allowed_sources:
+      - project_files
+      - source_code
+      fallback_when_denied: mark_as_unavailable
+      user_allowed_self_research: 'true'
+      user_was_asked: false
+    relations:
+    - confidence_score: 90
+      explanation: Brak kompresji koperty jest konsekwencja niekompletnego auto-pilota
+      from_variable_id: V006
+      relation_type: zalezy_od
+      to_variable_id: V009
+    - confidence_score: 90
+      explanation: Brak walidacji wyjscia jest czescia niekompletnego auto-pilota
+      from_variable_id: V006
+      relation_type: zalezy_od
+      to_variable_id: V010
+    - confidence_score: 85
+      explanation: Cache LLM jest potrzebny glownie dla auto-pilota przy iteracji
+        bramki
+      from_variable_id: V006
+      relation_type: zalezy_od
+      to_variable_id: V008
+    - confidence_score: 80
+      explanation: Rownoleglosc dotyczy stacji dekompozycja w sciezce doglebny
+      from_variable_id: V007
+      relation_type: dotyczy
+      to_variable_id: V004
+    sources_used:
+    - source_name: .ai-kb/00-overview.md
+      source_reference: .ai-kb/00-overview.md
+      source_type: project_file
+      used_for: Przeglad projektu, cel, kontekst, decyzje architektoniczne, status
+      verification_scope: Pelny plik
+    - source_name: .ai-kb/01-structure-and-conventions.md
+      source_reference: .ai-kb/01-structure-and-conventions.md
+      source_type: project_file
+      used_for: Struktura katalogow, konwencje, zaleznosci
+      verification_scope: Pelny plik
+    - source_name: .ai-kb/02-decisions-and-pitfalls.md
+      source_reference: .ai-kb/02-decisions-and-pitfalls.md
+      source_type: project_file
+      used_for: Decyzje architektoniczne D1-D8, pulapki P1-P6
+      verification_scope: Pelny plik
+    - source_name: src/pipeline_mcp/auto_pilot.py
+      source_reference: src/pipeline_mcp/auto_pilot.py
+      source_type: source_code
+      used_for: Analiza trybu auto-pilot - luki w petli wykonawczej
+      verification_scope: Pelny plik 192 linie
+    - source_name: src/pipeline_mcp/server.py
+      source_reference: src/pipeline_mcp/server.py
+      source_type: source_code
+      used_for: Analiza 22 narzedzi MCP, przeplyw wykonania
+      verification_scope: Pelny plik 1074 linie
+    - source_name: src/pipeline_mcp/routing.py
+      source_reference: src/pipeline_mcp/routing.py
+      source_type: source_code
+      used_for: Sciezki pipeline, routing, determinacja nastepnej stacji
+      verification_scope: Pelny plik 120 linii
+    - source_name: src/pipeline_mcp/contracts.py
+      source_reference: src/pipeline_mcp/contracts.py
+      source_type: source_code
+      used_for: Mapowanie pol I/O miedzy stacjami, walidacja kontraktow
+      verification_scope: Pelny plik
+    - source_name: src/pipeline_mcp/llm.py
+      source_reference: src/pipeline_mcp/llm.py
+      source_type: source_code
+      used_for: Abstrakcja dostawcy LLM, protokol, implementacje
+      verification_scope: Pelny plik 149 linii
+    - source_name: src/pipeline_mcp/models.py
+      source_reference: src/pipeline_mcp/models.py
+      source_type: source_code
+      used_for: Modele Pydantic, struktury danych, wyjatki
+      verification_scope: Pelny plik 234 linie
+    - source_name: src/pipeline_mcp/envelope.py
+      source_reference: src/pipeline_mcp/envelope.py
+      source_type: source_code
+      used_for: Logika koperty, kompresja, serializacja
+      verification_scope: Pelny plik 112 linie
+    - source_name: src/pipeline_mcp/quality_gate.py
+      source_reference: src/pipeline_mcp/quality_gate.py
+      source_type: source_code
+      used_for: Bramka jakosci, ocena, petla zwrotna
+      verification_scope: Pelny plik 84 linie
+    - source_name: src/pipeline_mcp/memgraph.py
+      source_reference: src/pipeline_mcp/memgraph.py
+      source_type: source_code
+      used_for: Integracja z Memgraph, zapis wezlow i relacji
+      verification_scope: Pelny plik
+    - source_name: src/pipeline_mcp/stations.py
+      source_reference: src/pipeline_mcp/stations.py
+      source_type: source_code
+      used_for: Definicje 13 stacji, kontrakty I/O
+      verification_scope: Pelny plik 191 linii
+    - source_name: src/pipeline_mcp/config.py
+      source_reference: src/pipeline_mcp/config.py
+      source_type: source_code
+      used_for: Konfiguracja, autodetekcja workspace, persystencja
+      verification_scope: Pelny plik 172 linie
+    - source_name: src/pipeline_mcp/skills_loader.py
+      source_reference: src/pipeline_mcp/skills_loader.py
+      source_type: source_code
+      used_for: Ladowanie skilli, budowanie promptow, integralnosc
+      verification_scope: Pelny plik 143 linie
+    - source_name: README.md
+      source_reference: README.md
+      source_type: project_file
+      used_for: Przeglad, instalacja, szybki start, dokumentacja
+      verification_scope: Pelny plik 189 linii
+    variables:
+    - confidence_score: 95
+      conflicts: []
+      dependencies: []
+      id: V001
+      label: Typ projektu
+      missing_data: []
+      name: project_type
+      reusable_prompt_token: ''
+      source_reference: .ai-kb/00-overview.md
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: Samodzielny serwer MCP orkiestrujacy agentow AI przez 13 stacji pipeline
+    - confidence_score: 100
+      conflicts: []
+      dependencies: []
+      id: V002
+      label: Liczba modulow Python
+      missing_data: []
+      name: modules_count
+      reusable_prompt_token: ''
+      source_reference: .ai-kb/00-overview.md
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: '16'
+    - confidence_score: 100
+      conflicts: []
+      dependencies: []
+      id: V003
+      label: Liczba narzedzi MCP
+      missing_data: []
+      name: tools_count
+      reusable_prompt_token: ''
+      source_reference: .ai-kb/00-overview.md
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: '22'
+    - confidence_score: 100
+      conflicts: []
+      dependencies: []
+      id: V004
+      label: Liczba stacji pipeline
+      missing_data: []
+      name: stations_count
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/stations.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: '13'
+    - confidence_score: 100
+      conflicts: []
+      dependencies: []
+      id: V005
+      label: Sciezki pipeline
+      missing_data: []
+      name: paths
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/routing.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: szybki (5), pelny (9), doglebny (13)
+    - confidence_score: 95
+      conflicts: []
+      dependencies:
+      - V001
+      id: V006
+      label: Luka auto-pilota
+      missing_data: []
+      name: auto_pilot_gap
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/auto_pilot.py:42-70
+      source_type: verified_source
+      type: risk
+      validation_rule: ''
+      value: start_auto_pilot ustawia stan w pamieci ale nie ma petli wykonawczej
+        - brak funkcji iterujacej przez stacje z wywolaniem LLM i checkpointingiem
+    - confidence_score: 85
+      conflicts: []
+      dependencies:
+      - V004
+      id: V007
+      label: Brak rownoleglosci
+      missing_data: []
+      name: no_parallelism
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/stations.py - brak narzedzi fork/join
+      source_type: agent_inference
+      type: risk
+      validation_rule: ''
+      value: Dekompozycja tworzy podproblemy ale nie ma mechanizmu fork/join dla rownoleglych
+        sub-pipeline'ow
+    - confidence_score: 85
+      conflicts: []
+      dependencies:
+      - V006
+      id: V008
+      label: Brak cache LLM
+      missing_data: []
+      name: no_llm_cache
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/auto_pilot.py - brak modulu cache
+      source_type: agent_inference
+      type: risk
+      validation_rule: ''
+      value: Przy iteracji bramki ta sama stacja moze byc wywolana ponownie z niemal
+        identycznym promptem - brak cache wynikow LLM
+    - confidence_score: 90
+      conflicts: []
+      dependencies:
+      - V006
+      id: V009
+      label: Brak kompresji koperty w auto-pilocie
+      missing_data: []
+      name: no_envelope_compression_in_autopilot
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/envelope.py:73, src/pipeline_mcp/auto_pilot.py
+      source_type: verified_source
+      type: risk
+      validation_rule: ''
+      value: compress_envelope istnieje w envelope.py:73 ale nie jest wywolywany w
+        auto_pilot - envelope rosnie z kazda stacja
+    - confidence_score: 90
+      conflicts: []
+      dependencies:
+      - V006
+      id: V010
+      label: Brak walidacji wyjscia LLM
+      missing_data: []
+      name: no_output_validation
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/auto_pilot.py:95-120
+      source_type: verified_source
+      type: risk
+      validation_rule: ''
+      value: parse_llm_output akceptuje surowy tekst jako fallback bez sprawdzania
+        kontraktu wyjsciowego stacji
+    - confidence_score: 100
+      conflicts: []
+      dependencies:
+      - V001
+      id: V011
+      label: Format persystencji
+      missing_data: []
+      name: persistence_format
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/config.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: YAML - manifest + checkpointy w .ai-kb/pipeline-runs/
+    - confidence_score: 100
+      conflicts: []
+      dependencies:
+      - V001
+      id: V012
+      label: Dostawcy LLM
+      missing_data: []
+      name: llm_providers
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/llm.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: OpenAI, Anthropic, Local (Ollama)
+    - confidence_score: 95
+      conflicts: []
+      dependencies:
+      - V001
+      id: V013
+      label: Memgraph opcjonalny
+      missing_data: []
+      name: memgraph_optional
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/memgraph.py, .ai-kb/02-decisions-and-pitfalls.md
+        P3
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: Integracja z Memgraph opcjonalna - bez niej brak audytowalnosci relacyjnej
+        i skill audyt_runu nie dziala
+    - confidence_score: 100
+      conflicts: []
+      dependencies:
+      - V004
+      id: V014
+      label: Max iteracji bramki
+      missing_data: []
+      name: gate_max_iterations
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/quality_gate.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: 2 - po eskalacji wymagana interwencja ludzka
+    - confidence_score: 100
+      conflicts: []
+      dependencies:
+      - V001
+      id: V015
+      label: Stack technologiczny
+      missing_data: []
+      name: tech_stack
+      reusable_prompt_token: ''
+      source_reference: pyproject.toml
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: Python 3.11+, FastMCP, Pydantic, PyYAML, opcjonalnie neo4j, openai, anthropic
+walidacja:
+  stacja_docelowa: analiza
+  pola_wymagane:
+  - NAZWA_OBIEKTU
+  pola_obecne:
+  - NAZWA_OBIEKTU
+  pola_brakujace: []
+  status: gotowy
+  akcja_naprawcza: ''
+relacje:
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:inicjuj
+  typ: zawiera
+  pola: []
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:zmienne
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:inicjuj
+  cel: stacja:zmienne
+  typ: nastapila_po
+  pola: []
+timestamp: '2026-07-01T13:56:28.691649'
+_checkpoint:
+  station: zmienne
+  suffix: ''
+  timestamp: '2026-07-01T13:56:28.691923'

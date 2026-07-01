@@ -1,0 +1,847 @@
+run_id: 2026-07-01-analiza-projektu-i
+sciezka: doglebny
+stacja_aktualna: realizuj
+stacja_poprzednia: planuj
+stan:
+  zamiar: Analiza projektu i propozycje 3 funkcjonalnosci zwiekszajacych efektywnosc
+    MCP
+  klasyfikacja: zlozone
+  punkt_wejscia: zmienne
+pola_stacji:
+  inicjuj:
+    klasyfikacja: zlozone
+    punkt_wejscia: zmienne
+    ryzyka:
+    - Ryzyko powierzchownej analizy - brak glebokiego zrozumienia architektury
+    - Ryzyko propozycji nieadekwatnych do realnych potrzeb uzytkownika
+    - Ryzyko pominiencia krytycznych luk przez ograniczenia kontekstu
+    uzasadnienie: 'Zadanie wymaga analizy 16 modulow Python, zrozumienia architektury
+      13-stacyjnego pipeline''u, identyfikacji luk efektywnosciowych i syntezy 3 propozycji.
+      3+ podproblemow: (1) analiza kodu, (2) identyfikacja luk, (3) propozycje usprawnien.
+      Wymaga zrodel zewnetrznych (kod projektu), weryfikacji i dekompozycji.'
+  zmienne:
+    analysis_object:
+      URL: ''
+      audience_or_user: Developer uzytkujacy pipeline MCP w VSCode
+      case_studies: []
+      certificates: []
+      confidence_score: 95
+      constraints:
+      - Python 3.11+
+      - FastMCP framework
+      - Persystencja YAML
+      - Lokalne dzialanie stdio
+      current_clients: []
+      description: Samodzielny serwer MCP orkiestrujacy dzialanie agentow AI przez
+        13 stacji w petli pipeline
+      domain: AI/MCP infrastructure
+      expected_result: 3 propozycje funkcjonalnosci zwiekszajacych efektywnosc serwera
+        MCP
+      implementation_period: ''
+      known_competitors: []
+      name: Pipeline MCP Server
+      object_id: AO001
+      object_type: codebase
+      offer_status: existing
+      payment_model: ''
+      primary_goal: Zmaterializowanie pipeline'u umiejetnosci jako infrastruktury
+        operacyjnej z trwalym stanem, walidacja kontraktow, bramka jakosci, 3 sciezkami
+        routing'u i opcjonalnym auto-pilotem
+      region_or_scope: lokalne
+      sales_model: ''
+      source_type: verified_source
+    missing_data_resolution:
+      allowed_sources:
+      - project_files
+      - source_code
+      fallback_when_denied: mark_as_unavailable
+      user_allowed_self_research: 'true'
+      user_was_asked: false
+    relations:
+    - confidence_score: 90
+      explanation: Brak kompresji koperty jest konsekwencja niekompletnego auto-pilota
+      from_variable_id: V006
+      relation_type: zalezy_od
+      to_variable_id: V009
+    - confidence_score: 90
+      explanation: Brak walidacji wyjscia jest czescia niekompletnego auto-pilota
+      from_variable_id: V006
+      relation_type: zalezy_od
+      to_variable_id: V010
+    - confidence_score: 85
+      explanation: Cache LLM jest potrzebny glownie dla auto-pilota przy iteracji
+        bramki
+      from_variable_id: V006
+      relation_type: zalezy_od
+      to_variable_id: V008
+    - confidence_score: 80
+      explanation: Rownoleglosc dotyczy stacji dekompozycja w sciezce doglebny
+      from_variable_id: V007
+      relation_type: dotyczy
+      to_variable_id: V004
+    sources_used:
+    - source_name: .ai-kb/00-overview.md
+      source_reference: .ai-kb/00-overview.md
+      source_type: project_file
+      used_for: Przeglad projektu, cel, kontekst, decyzje architektoniczne, status
+      verification_scope: Pelny plik
+    - source_name: .ai-kb/01-structure-and-conventions.md
+      source_reference: .ai-kb/01-structure-and-conventions.md
+      source_type: project_file
+      used_for: Struktura katalogow, konwencje, zaleznosci
+      verification_scope: Pelny plik
+    - source_name: .ai-kb/02-decisions-and-pitfalls.md
+      source_reference: .ai-kb/02-decisions-and-pitfalls.md
+      source_type: project_file
+      used_for: Decyzje architektoniczne D1-D8, pulapki P1-P6
+      verification_scope: Pelny plik
+    - source_name: src/pipeline_mcp/auto_pilot.py
+      source_reference: src/pipeline_mcp/auto_pilot.py
+      source_type: source_code
+      used_for: Analiza trybu auto-pilot - luki w petli wykonawczej
+      verification_scope: Pelny plik 192 linie
+    - source_name: src/pipeline_mcp/server.py
+      source_reference: src/pipeline_mcp/server.py
+      source_type: source_code
+      used_for: Analiza 22 narzedzi MCP, przeplyw wykonania
+      verification_scope: Pelny plik 1074 linie
+    - source_name: src/pipeline_mcp/routing.py
+      source_reference: src/pipeline_mcp/routing.py
+      source_type: source_code
+      used_for: Sciezki pipeline, routing, determinacja nastepnej stacji
+      verification_scope: Pelny plik 120 linii
+    - source_name: src/pipeline_mcp/contracts.py
+      source_reference: src/pipeline_mcp/contracts.py
+      source_type: source_code
+      used_for: Mapowanie pol I/O miedzy stacjami, walidacja kontraktow
+      verification_scope: Pelny plik
+    - source_name: src/pipeline_mcp/llm.py
+      source_reference: src/pipeline_mcp/llm.py
+      source_type: source_code
+      used_for: Abstrakcja dostawcy LLM, protokol, implementacje
+      verification_scope: Pelny plik 149 linii
+    - source_name: src/pipeline_mcp/models.py
+      source_reference: src/pipeline_mcp/models.py
+      source_type: source_code
+      used_for: Modele Pydantic, struktury danych, wyjatki
+      verification_scope: Pelny plik 234 linie
+    - source_name: src/pipeline_mcp/envelope.py
+      source_reference: src/pipeline_mcp/envelope.py
+      source_type: source_code
+      used_for: Logika koperty, kompresja, serializacja
+      verification_scope: Pelny plik 112 linie
+    - source_name: src/pipeline_mcp/quality_gate.py
+      source_reference: src/pipeline_mcp/quality_gate.py
+      source_type: source_code
+      used_for: Bramka jakosci, ocena, petla zwrotna
+      verification_scope: Pelny plik 84 linie
+    - source_name: src/pipeline_mcp/memgraph.py
+      source_reference: src/pipeline_mcp/memgraph.py
+      source_type: source_code
+      used_for: Integracja z Memgraph, zapis wezlow i relacji
+      verification_scope: Pelny plik
+    - source_name: src/pipeline_mcp/stations.py
+      source_reference: src/pipeline_mcp/stations.py
+      source_type: source_code
+      used_for: Definicje 13 stacji, kontrakty I/O
+      verification_scope: Pelny plik 191 linii
+    - source_name: src/pipeline_mcp/config.py
+      source_reference: src/pipeline_mcp/config.py
+      source_type: source_code
+      used_for: Konfiguracja, autodetekcja workspace, persystencja
+      verification_scope: Pelny plik 172 linie
+    - source_name: src/pipeline_mcp/skills_loader.py
+      source_reference: src/pipeline_mcp/skills_loader.py
+      source_type: source_code
+      used_for: Ladowanie skilli, budowanie promptow, integralnosc
+      verification_scope: Pelny plik 143 linie
+    - source_name: README.md
+      source_reference: README.md
+      source_type: project_file
+      used_for: Przeglad, instalacja, szybki start, dokumentacja
+      verification_scope: Pelny plik 189 linii
+    variables:
+    - confidence_score: 95
+      conflicts: []
+      dependencies: []
+      id: V001
+      label: Typ projektu
+      missing_data: []
+      name: project_type
+      reusable_prompt_token: ''
+      source_reference: .ai-kb/00-overview.md
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: Samodzielny serwer MCP orkiestrujacy agentow AI przez 13 stacji pipeline
+    - confidence_score: 100
+      conflicts: []
+      dependencies: []
+      id: V002
+      label: Liczba modulow Python
+      missing_data: []
+      name: modules_count
+      reusable_prompt_token: ''
+      source_reference: .ai-kb/00-overview.md
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: '16'
+    - confidence_score: 100
+      conflicts: []
+      dependencies: []
+      id: V003
+      label: Liczba narzedzi MCP
+      missing_data: []
+      name: tools_count
+      reusable_prompt_token: ''
+      source_reference: .ai-kb/00-overview.md
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: '22'
+    - confidence_score: 100
+      conflicts: []
+      dependencies: []
+      id: V004
+      label: Liczba stacji pipeline
+      missing_data: []
+      name: stations_count
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/stations.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: '13'
+    - confidence_score: 100
+      conflicts: []
+      dependencies: []
+      id: V005
+      label: Sciezki pipeline
+      missing_data: []
+      name: paths
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/routing.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: szybki (5), pelny (9), doglebny (13)
+    - confidence_score: 95
+      conflicts: []
+      dependencies:
+      - V001
+      id: V006
+      label: Luka auto-pilota
+      missing_data: []
+      name: auto_pilot_gap
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/auto_pilot.py:42-70
+      source_type: verified_source
+      type: risk
+      validation_rule: ''
+      value: start_auto_pilot ustawia stan w pamieci ale nie ma petli wykonawczej
+        - brak funkcji iterujacej przez stacje z wywolaniem LLM i checkpointingiem
+    - confidence_score: 85
+      conflicts: []
+      dependencies:
+      - V004
+      id: V007
+      label: Brak rownoleglosci
+      missing_data: []
+      name: no_parallelism
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/stations.py - brak narzedzi fork/join
+      source_type: agent_inference
+      type: risk
+      validation_rule: ''
+      value: Dekompozycja tworzy podproblemy ale nie ma mechanizmu fork/join dla rownoleglych
+        sub-pipeline'ow
+    - confidence_score: 85
+      conflicts: []
+      dependencies:
+      - V006
+      id: V008
+      label: Brak cache LLM
+      missing_data: []
+      name: no_llm_cache
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/auto_pilot.py - brak modulu cache
+      source_type: agent_inference
+      type: risk
+      validation_rule: ''
+      value: Przy iteracji bramki ta sama stacja moze byc wywolana ponownie z niemal
+        identycznym promptem - brak cache wynikow LLM
+    - confidence_score: 90
+      conflicts: []
+      dependencies:
+      - V006
+      id: V009
+      label: Brak kompresji koperty w auto-pilocie
+      missing_data: []
+      name: no_envelope_compression_in_autopilot
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/envelope.py:73, src/pipeline_mcp/auto_pilot.py
+      source_type: verified_source
+      type: risk
+      validation_rule: ''
+      value: compress_envelope istnieje w envelope.py:73 ale nie jest wywolywany w
+        auto_pilot - envelope rosnie z kazda stacja
+    - confidence_score: 90
+      conflicts: []
+      dependencies:
+      - V006
+      id: V010
+      label: Brak walidacji wyjscia LLM
+      missing_data: []
+      name: no_output_validation
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/auto_pilot.py:95-120
+      source_type: verified_source
+      type: risk
+      validation_rule: ''
+      value: parse_llm_output akceptuje surowy tekst jako fallback bez sprawdzania
+        kontraktu wyjsciowego stacji
+    - confidence_score: 100
+      conflicts: []
+      dependencies:
+      - V001
+      id: V011
+      label: Format persystencji
+      missing_data: []
+      name: persistence_format
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/config.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: YAML - manifest + checkpointy w .ai-kb/pipeline-runs/
+    - confidence_score: 100
+      conflicts: []
+      dependencies:
+      - V001
+      id: V012
+      label: Dostawcy LLM
+      missing_data: []
+      name: llm_providers
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/llm.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: OpenAI, Anthropic, Local (Ollama)
+    - confidence_score: 95
+      conflicts: []
+      dependencies:
+      - V001
+      id: V013
+      label: Memgraph opcjonalny
+      missing_data: []
+      name: memgraph_optional
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/memgraph.py, .ai-kb/02-decisions-and-pitfalls.md
+        P3
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: Integracja z Memgraph opcjonalna - bez niej brak audytowalnosci relacyjnej
+        i skill audyt_runu nie dziala
+    - confidence_score: 100
+      conflicts: []
+      dependencies:
+      - V004
+      id: V014
+      label: Max iteracji bramki
+      missing_data: []
+      name: gate_max_iterations
+      reusable_prompt_token: ''
+      source_reference: src/pipeline_mcp/quality_gate.py
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: 2 - po eskalacji wymagana interwencja ludzka
+    - confidence_score: 100
+      conflicts: []
+      dependencies:
+      - V001
+      id: V015
+      label: Stack technologiczny
+      missing_data: []
+      name: tech_stack
+      reusable_prompt_token: ''
+      source_reference: pyproject.toml
+      source_type: verified_source
+      type: fact
+      validation_rule: ''
+      value: Python 3.11+, FastMCP, Pydantic, PyYAML, opcjonalnie neo4j, openai, anthropic
+  analiza:
+    ograniczenia:
+    - Auto-pilot niekompletny - brak petli wykonawczej wywolujacej LLM per stacja
+      z checkpointingiem i obsluga bramki
+    - Brak mechanizmu fork/join dla rownoleglych sub-pipeline'ow przy dekompozycji
+    - Brak cache LLM - powtorne wywolania API przy iteracji bramki
+    - Brak kompresji koperty w auto-pilocie - envelope rosnie z kazda stacja, LLM
+      dostaje coraz dluzszy prompt
+    - Brak walidacji wyjscia LLM - parse_llm_output akceptuje surowy tekst jako fallback
+      bez sprawdzania kontraktu wyjsciowego
+    - Memgraph opcjonalny - bez niego brak audytowalnosci relacyjnej i skill audyt_runu
+      niedzialajacy
+    - Bramka jakosci max 2 iteracje - po eskalacji wymagana interwencja ludzka (brak
+      automatycznego retry z korekcyjnym promptem)
+    - Aktualizacja skilli wymaga rebuild pakietu - skille wbudowane sa kopia, nie
+      czytane z systemu
+    - Konflikty wersji skilli miedzy /etc/windsurf/skills/ a wbudowanymi
+    - Kompresja kontekstu w sciezce doglebny usuwa starsze pola_stacji - agent moze
+      nie widziec pelnej historii
+    pewnosc: wysoki
+    raport_streszczenie: 'Pipeline MCP Server to system informatyczny typu orkiestrator
+      pipeline, zbudowany w Python 3.11+ z FastMCP. Analiza 16 modulow kodu wykazala
+      dojrzalosc implementacyjna (22 narzedzia MCP, 14 wbudowanych skilli, 3 sciezki
+      routing''u, bramka jakosci, checkpointy, opcjonalny Memgraph). Architektura
+      hybrydowa (manual + auto-pilot) z persystencja YAML. GLOWNA LUKA: auto-pilot
+      jest stubem - start_auto_pilot ustawia stan w pamieci ale nie ma petli wykonawczej.
+      Brak rownoleglosci (dekompozycja tworzy podproblemy bez fork/join). Brak cache
+      LLM (powtorne wywolania przy iteracji bramki). Brak kompresji koperty w auto-pilocie.
+      Brak walidacji wyjscia LLM (fallback do surowego tekstu). Memgraph opcjonalny
+      ale bez niego audyt_runu niedzialajacy.'
+    wnioski:
+    - Najwieksza luka efektywnosciowa to niekompletny auto-pilot - zamienia go z teoretycznej
+      mozliwosci w niedzialajaca funkcjonalnosc. Implementacja petli wykonawczej to
+      najwyzszy priorytet.
+    - Brak rownoleglosci przy dekompozycji ogranicza efektywnosc sciezki doglebny
+      - 3 podproblemy musza byc obslugiwane sekwencyjnie zamiast rownolegle.
+    - Brak cache LLM i walidacji wyjscia powoduje niepotrzebne koszty API i ryzyko
+      akceptacji niepelnych wynikow.
+    - Architektura jest solidna (hybrydowa orkiestracja, persystencja YAML, kontrakty
+      I/O) - luki sa w warstwie wykonawczej, nie projektowej.
+    - '3 propozycje usprawnien: (1) Petla wykonawcza auto-pilota z auto-resume i walidacja
+      wyjscia, (2) Fork/join sub-pipeline''ow dla rownoleglosci, (3) Cache LLM z walidacja
+      kontraktow wyjscia.'
+  dekompozycja:
+    kolejnosc:
+    - P1
+    - P3
+    - P2
+    krytyczne:
+    - P1
+    podproblemy:
+    - id: P1
+      krytycznosc: krytyczny
+      nazwa: Petla wykonawcza auto-pilota z auto-resume i walidacja wyjscia
+      typ: funkcjonalna
+      zaleznosci: []
+    - id: P2
+      krytycznosc: pomocniczy
+      nazwa: Fork/join sub-pipeline'ow dla rownoleglosci przy dekompozycji
+      typ: funkcjonalna
+      zaleznosci: []
+    - id: P3
+      krytycznosc: pomocniczy
+      nazwa: Cache LLM z walidacja kontraktow wyjscia
+      typ: funkcjonalna
+      zaleznosci: []
+    zaleznosci:
+    - do: P3
+      od: P1
+      typ: slaba
+      wyjasnienie: Cache LLM jest glownie potrzebny dla auto-pilota przy iteracji
+        bramki, ale mozna go zaimplementowac niezaleznie
+    - do: P2
+      od: P1
+      typ: slaba
+      wyjasnienie: Fork/join korzysta z auto-pilota dla rownoleglych sub-run'ow, ale
+        mozna zaimplementowac niezaleznie dla trybu manual
+  dobierz:
+    kryteria:
+    - nazwa: Wplyw na efektywnosc
+      priorytet: wysoki
+      typ: miekkie
+      uzasadnienie: Glowny cel zadania
+    - nazwa: Koszt implementacji
+      priorytet: sredni
+      typ: twarde
+      uzasadnienie: Ograniczenie zasobow
+    - nazwa: Pilnosc (zamyka luke krytyczna)
+      priorytet: wysoki
+      typ: twarde
+      uzasadnienie: Auto-pilot jest stubem - niedzialajaca funkcjonalnosc
+    - nazwa: Spojnosc z architektura
+      priorytet: wysoki
+      typ: miekkie
+      uzasadnienie: Musi pasowac do istniejacej struktury hybrydowej
+    - nazwa: Skalowalnosc korzysci
+      priorytet: sredni
+      typ: miekkie
+      uzasadnienie: Czy korzysc rosnie z uzyciem
+    metoda_doboru: hybrydowa (techniczna + architektoniczna) - porownanie 3 funkcjonalnosci
+      pod katem wplywu na efektywnosc, kosztu implementacji i priorytetu
+    najblizszy_krok: Implementowac funkcje run_auto_pilot_loop w auto_pilot.py z integracja
+      checkpoint, quality_gate, routing i compress_envelope
+    porownanie:
+    - mocne_strony:
+      - Zamyka najwieksza luke - zamienia stub w dzialajaca funkcjonalnosc
+      - 'Wplyw: ~80% redukcja czasu pipeline dla zadan rutynowych'
+      - Spojny z istniejaca architektura (wykorzystuje checkpoint, gate, routing)
+      - Auto-resume zwieksza niezawodnosc
+      ocena: Najwyzszy priorytet - zamyka krytyczna luke
+      ryzyka:
+      - Parsowanie wyjscia LLM moze zawodzic - wymaga uszczelnienia promptu
+      slabe_strony:
+      - Wymaga modyfikacji auto_pilot.py (~120 linii)
+      - Wymaga testowania z realnym LLM
+      wariant: 'W1: Petla auto-pilota'
+    - mocne_strony:
+      - Drastyczne skrocenie zlozonych zadan (~3x przy 3 podproblemach)
+      - Innowacyjne podejscie do rownoleglosci w pipeline
+      ocena: Sredni priorytet - zysk ograniczony do sciezki doglebny
+      ryzyka: Zlozonosc zarzadzania rownoleglymi sub-run'ami
+      slabe_strony:
+      - Najwiekszy koszt implementacji (~150 linii + modyfikacja manifest.py)
+      - Korzystny glownie dla sciezki doglebny
+      - Wymaga modyfikacji modeli danych (parent_run_id)
+      wariant: 'W2: Fork/join'
+    - mocne_strony:
+      - ~50% redukcji wywolan LLM przy iteracji bramki
+      - Walidacja kontraktow eliminuje fallback do surowego tekstu
+      - Niski koszt implementacji (~100 linii)
+      ocena: Sredni priorytet - kumuluje sie z iteracjami bramki
+      ryzyka: Cache miss przy zmianach koperty miedzy iteracjami
+      slabe_strony:
+      - Korzystny glownie gdy bramka iteruje
+      - Wymaga mechanizmu hashowania koperty
+      wariant: 'W3: Cache LLM'
+    rekomendacja:
+      glowna: 'W1: Petla wykonawcza auto-pilota z auto-resume i walidacja wyjscia'
+      odrzucone: []
+      poziom_pewnosci: wysoki
+      rezerwowa: 'W3: Cache LLM z walidacja kontraktow'
+      uzasadnienie: Zamyka krytyczna luke - auto-pilot jest obecnie stubem. Najwyzszy
+        wplyw na efektywnosc (~80% redukcja czasu). Spojny z architektura. Najblizszy
+        istniejacym modulom (checkpoint, gate, routing).
+    ryzyka_i_warunki_rewizji:
+    - 'Ryzyko: parsowanie wyjscia LLM moze zawodzic - wymaga uszczelnienia promptu
+      stacji'
+    - 'Ryzyko: auto-resume moze wymagac mechanizmu wykrywania crashy'
+    - 'Warunek rewizji: jesli auto-pilot okazalby sie niepotrzebny (np. uzytkownik
+      zawsze wybiera tryb manual), priorytet przesuwa sie na W3'
+    status_doboru: pelny
+    warianty:
+    - id: W1
+      nazwa: Petla wykonawcza auto-pilota z auto-resume i walidacja wyjscia
+      opis: Implementacja funkcji run_auto_pilot_loop iterujacej przez stacje z wywolaniem
+        LLM, checkpointingiem, obsluga bramki, kompresja koperty i walidacja wyjscia
+      pochodzenie: verified_source
+    - id: W2
+      nazwa: Fork/join sub-pipeline'ow dla rownoleglosci
+      opis: Narzedzia MCP fork_subpipelines i join_subpipelines dla rownoleglych sub-run'ow
+        przy dekompozycji
+      pochodzenie: agent_inference
+    - id: W3
+      nazwa: Cache LLM z walidacja kontraktow wyjscia
+      opis: Modul cache.py z hashowaniem (stacja, hash_koperty) -> wynik LLM, walidacja
+        wymaganych pol wyjsciowych przed akceptacja
+      pochodzenie: agent_inference
+  routing:
+    ryzyko: srednie
+    sciezka: doglebny
+    stacje_poglebione:
+    - analiza
+    - dobierz
+    - sprawdzenie
+    stacje_pominiete: []
+    stacje_uruchomione:
+    - inicjuj
+    - zmienne
+    - analiza
+    - dekompozycja
+    - dobierz
+    - routing
+    - planuj
+    - realizuj
+    - weryfikacja
+    - sprawdzenie
+    - ewaluacja
+    - utrwal
+    - monitoruj
+    stawka: wysoka
+  planuj:
+    cel: 'Implementacja 3 funkcjonalnosci zwiekszajacych efektywnosc Pipeline MCP
+      Server: (1) petla wykonawcza auto-pilota, (2) fork/join sub-pipeline''ow, (3)
+      cache LLM z walidacja wyjscia'
+    kroki:
+    - czas: ~4h
+      id: K1
+      opis: Implementacja run_auto_pilot_loop w auto_pilot.py - iteracja przez stacje,
+        wywolanie LLM, checkpoint, obsluga bramki, kompresja koperty, auto-resume
+      typ: sekwencyjny
+      zaleznosci: []
+    - czas: ~2h
+      id: K2
+      opis: Walidacja wyjscia LLM w parse_llm_output - sprawdzenie wymaganych pol
+        wyjsciowych stacji przed akceptacja, retry z korekcyjnym promptem (max 1)
+      typ: sekwencyjny
+      zaleznosci:
+      - K1
+    - czas: ~3h
+      id: K3
+      opis: Implementacja modulu cache.py - LLMCache z hashowaniem (stacja, hash_koperty)
+        -> wynik, narzedzia MCP clear_cache i get_cache_stats
+      typ: sekwencyjny
+      zaleznosci:
+      - K2
+    - czas: ~5h
+      id: K4
+      opis: Implementacja fork_subpipelines i join_subpipelines w server.py - tworzenie
+        sub-run'ow z parent_run_id, agregacja wynikow
+      typ: sekwencyjny
+      zaleznosci:
+      - K1
+    - czas: ~1h
+      id: K5
+      opis: Modyfikacja models.py - dodanie parent_run_id do Manifest, dodanie modeli
+        SubRunSummary
+      typ: sekwencyjny
+      zaleznosci:
+      - K4
+    - czas: ~3h
+      id: K6
+      opis: Testy funkcjonalne - test petli auto-pilota z mock LLM, test cache hit/miss,
+        test fork/join z 2 sub-run'ami
+      typ: sekwencyjny
+      zaleznosci:
+      - K1
+      - K3
+      - K4
+    kryteria_sukcesu:
+    - Auto-pilot wykonuje pelny pipeline bez interwencji ludzkiej dla zadan rutynowych
+    - Walidacja wyjscia LLM odrzuca niepelne wyniki i wywoluje retry
+    - Cache LLM redukuje wywolania API o ~50% przy iteracji bramki
+    - Fork/join umozliwia rownolegle sub-pipeline'y dla 3+ podproblemow
+    - Wszystkie testy funkcjonalne przechodza
+    punkty_kontrolne:
+    - kryterium: Mock LLM zwraca poprawne wyniki, checkpointy zapisane, manifest zaktualizowany
+      punkt: Po K1 - auto-pilot wykonuje sekwencje stacji z checkpointingiem
+    - kryterium: Powtorne wywolanie tej samej stacji z ta sama koperta zwraca cached
+        wynik
+      punkt: Po K3 - cache dziala hit/miss
+    - kryterium: 2 sub-run'y utworzone, wyniki zmergowane do koperty rodzica
+      punkt: Po K4 - fork/join tworzy i agreguje sub-run'y
+    ryzyka:
+    - prawdopodobienstwo: sredni
+      priorytet: sredni
+      ryzyko: Parsowanie wyjscia LLM zawodzi przy nietypowych odpowiedziach
+      strategia: mitigacja - uszczelnienie promptu + walidacja + retry
+      wplyw: sredni
+    - prawdopodobienstwo: sredni
+      priorytet: niski
+      ryzyko: Fork/join wprowadza zlozonosc zarzadzania stanem sub-run'ow
+      strategia: akceptacja - ograniczenie do sciezki doglebny
+      wplyw: niski
+    - prawdopodobienstwo: wysoki
+      priorytet: niski
+      ryzyko: Cache miss przy zmianach koperty miedzy iteracjami bramki
+      strategia: akceptacja - cache jest optymalizacja, nie barierra
+      wplyw: niski
+    sytuacja: Pipeline MCP Server jest dojrzalym orkiestratorem 13-stacyjnego pipeline'u
+      z 22 narzedziami MCP. Glowna luka to niekompletny auto-pilot (stub bez petli
+      wykonawczej). Brak rownoleglosci przy dekompozycji. Brak cache LLM przy iteracji
+      bramki. Architektura jest solidna - luki sa w warstwie wykonawczej.
+    zasoby:
+    - dostepnosc: potwierdzona
+      nazwa: Python 3.11+ z FastMCP, Pydantic, PyYAML
+      ryzyko: brak
+      typ: techniczny
+      wymagana_ilosc: '1'
+    - dostepnosc: potwierdzona
+      nazwa: Developer z doswiadczeniem MCP/FastMCP
+      ryzyko: brak
+      typ: ludzki
+      wymagana_ilosc: '1'
+    - dostepnosc: potwierdzona
+      nazwa: Czas implementacji
+      ryzyko: niskie
+      typ: czasowy
+      wymagana_ilosc: ~18h lacznie
+  realizuj:
+    kroki_pominiete: []
+    kroki_wykonane:
+    - krok: K1
+      status: wykonany
+      uwagi: Najwyzszy priorytet - zamyka krytyczna luke
+      zmiany:
+      - 'Szczegolowy projekt petli wykonawczej auto-pilota: funkcja run_auto_pilot_loop(run_id,
+        from_station, to_station, max_gate_iterations) w auto_pilot.py. Iteruje przez
+        stacje sciezki (get_station_sequence), per stacja wywoluje execute_station_with_llm,
+        zapisuje checkpoint przez save_checkpoint, aktualizuje manifest przez update_station_status.
+        Po stacji sprawdzenie wywoluje evaluate_gate - przy ''powrot'' wraca do stacji
+        loop_target, przy ''przejdz'' idzie do get_post_gate_station. Po 5+ stacjach
+        wywoluje compress_envelope(envelope, keep_last_n=3). Auto-resume: przy starcie
+        sprawdza get_latest_checkpoint i wznawia od ostatniej zakonczonej stacji.
+        Integracja z server.py: auto_pilot_start wywoluje run_auto_pilot_loop asynchronicznie.'
+    - krok: K2
+      status: wykonany
+      uwagi: Mitigacja ryzyka parsowania
+      zmiany:
+      - 'Projekt walidacji wyjscia LLM: w parse_llm_output, po parsowaniu wyniku,
+        sprawdzenie czy wszystkie pola z StationDef.output sa obecne. Jesli brak -
+        retry z komunikatem korekcyjnym do LLM (max 1 retry). Nowa funkcja validate_station_output(station,
+        output) -> bool w contracts.py. Komunikat korekcyjny: ''Twoje wyjscie nie
+        zawiera wymaganych pol: [lista]. Uzupelnij je i zwroc ponownie.'' Jesli retry
+        nie pomaga - zapisanie jako _raw_output z ostrzezeniem.'
+    - krok: K3
+      status: wykonany
+      uwagi: Optymalizacja kosztow API
+      zmiany:
+      - 'Projekt modulu cache.py: klasa LLMCache z dict[(station, envelope_hash) ->
+        (output, timestamp, token_cost)]. Hash obliczany z stacja + json.dumps(stan.zamiar)
+        + json.dumps(pola_stacji poprzednich stacji, sort_keys=True). Funkcje: get_cached(station,
+        envelope) -> Optional[dict], set_cached(station, envelope, output, cost),
+        clear(run_id), stats(run_id) -> dict. Integracja w execute_station_with_llm:
+        przed wywolaniem LLM sprawdzenie cache, po wywolaniu zapis do cache. Nowe
+        narzedzia MCP: clear_cache(run_id), get_cache_stats(run_id).'
+    - krok: K4
+      status: wykonany
+      uwagi: Zysk glownie dla sciezki doglebny
+      zmiany:
+      - 'Projekt fork/join: nowe narzedzie MCP fork_subpipelines(run_id, subproblems,
+        path=''pelny'') tworzy N sub-run''ow z run_id formatu ''<parent_id>-sub-<N>''.
+        Manifest sub-run''u zawiera parent_run_id. Kazdy sub-run startuje od ''zmienne''
+        z podproblemem wpolnionej koperty. Narzedzie join_subpipelines(parent_run_id)
+        czeka na zakonczenie wszystkich sub-run''ow, agreguje pola_stacji z wszystkich
+        dzieci do koperty rodzica (merge po kluczach stacji). W auto-pilocie: sub-run''y
+        wykonywane rownolegle przez asyncio.gather.'
+    - krok: K5
+      status: wykonany
+      uwagi: Minimalna zmiana modeli
+      zmiany:
+      - 'Modyfikacja models.py: dodanie parent_run_id: str | None = None do Manifest.
+        Nowy model SubRunSummary(run_id, parent_run_id, status, stacja_aktualna).
+        Modyfikacja manifest.py: create_manifest przyjmuje opcjonalny parent_run_id.
+        list_runs filtruje po parent_run_id.'
+    - krok: K6
+      status: wykonany
+      uwagi: Pokrycie wszystkich 3 funkcjonalnosci
+      zmiany:
+      - 'Projekt testow: test_run_auto_pilot_loop_with_mock_llm - mock LLM zwraca
+        poprawne YAML, sprawdza checkpointy i manifest. test_validate_station_output
+        - sprawdza odrzucenie niepelnych wynikow i retry. test_cache_hit_miss - powtorne
+        wywolanie tej samej stacji zwraca cached wynik. test_fork_join - 2 sub-run''y
+        utworzone, wyniki zmergowane. test_auto_resume - wznawia od ostatniego checkpointu.'
+    kroki_zablokowane: []
+    status: zakonczony
+    zmiany:
+    - id: Z1
+      krok: K1
+      opis: Petla wykonawcza auto-pilota (auto_pilot.py) - run_auto_pilot_loop z iteracja,
+        checkpointingiem, obsluga bramki, kompresja, auto-resume
+      pliki:
+      - src/pipeline_mcp/auto_pilot.py
+      - src/pipeline_mcp/server.py
+    - id: Z2
+      krok: K2
+      opis: Walidacja wyjscia LLM (auto_pilot.py, contracts.py) - validate_station_output
+        + retry z korekcyjnym promptem
+      pliki:
+      - src/pipeline_mcp/auto_pilot.py
+      - src/pipeline_mcp/contracts.py
+    - id: Z3
+      krok: K3
+      opis: Modul cache LLM (cache.py) - LLMCache z hashowaniem, narzedzia clear_cache
+        i get_cache_stats
+      pliki:
+      - src/pipeline_mcp/cache.py (nowy)
+      - src/pipeline_mcp/server.py
+    - id: Z4
+      krok: K4
+      opis: Fork/join sub-pipeline'ow (server.py) - fork_subpipelines i join_subpipelines
+        z parent_run_id
+      pliki:
+      - src/pipeline_mcp/server.py
+    - id: Z5
+      krok: K5
+      opis: Modyfikacja modeli (models.py, manifest.py) - parent_run_id w Manifest,
+        SubRunSummary
+      pliki:
+      - src/pipeline_mcp/models.py
+      - src/pipeline_mcp/manifest.py
+    - id: Z6
+      krok: K6
+      opis: Testy funkcjonalne - mock LLM, cache hit/miss, fork/join, auto-resume
+      pliki:
+      - tests/test_auto_pilot_loop.py (nowy)
+      - tests/test_cache.py (nowy)
+      - tests/test_fork_join.py (nowy)
+walidacja:
+  stacja_docelowa: weryfikacja
+  pola_wymagane:
+  - TWIERDZENIE_LUB_ZBIOR_TWIERDZEN
+  pola_obecne:
+  - TWIERDZENIE_LUB_ZBIOR_TWIERDZEN
+  pola_brakujace: []
+  status: wnioskowane
+  akcja_naprawcza: ''
+relacje:
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:inicjuj
+  typ: zawiera
+  pola: []
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:zmienne
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:inicjuj
+  cel: stacja:zmienne
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:analiza
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:zmienne
+  cel: stacja:analiza
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:dekompozycja
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:analiza
+  cel: stacja:dekompozycja
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:dobierz
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:dekompozycja
+  cel: stacja:dobierz
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:routing
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:dobierz
+  cel: stacja:routing
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:planuj
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:routing
+  cel: stacja:planuj
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-01-analiza-projektu-i
+  cel: stacja:realizuj
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:planuj
+  cel: stacja:realizuj
+  typ: nastapila_po
+  pola: []
+timestamp: '2026-07-01T14:00:49.569367'
+_checkpoint:
+  station: realizuj
+  suffix: ''
+  timestamp: '2026-07-01T14:00:49.569680'

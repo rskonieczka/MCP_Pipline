@@ -77,3 +77,19 @@ W dlugich pipeline'ach (13 stacji) serwer kompresuje koperte, usuwajac starsze s
 ### P6: Konflikty wersji skilli
 
 Jesli skille w `/etc/windsurf/skills/` zostana zaktualizowane, a serwer nie, wbudowane skille serwera beda nieaktualne. Nalezy okresowo synchronizowac.
+
+### P7: Kierunek relacji NASTAPILA_PO
+
+Relacja `NASTAPILA_PO` ma kierunek **(stacja aktualna) -> (stacja poprzednia)**, nie odwrotnie. Blad w kierunku powoduje bledne wyniki zapytan audytowych (stacja `inicjuj` z relacja wychodzaca, `monitoruj` bez relacji). Naprawione w `envelope.py` po audycie run'u `2026-07-01-analiza-projektu-i`.
+
+### P8: Deduplikacja relacji w kopercie
+
+`add_station_relations` w `envelope.py` wywolane wielokrotnie dla tej samej stacji (np. przy powrocie bramki) dodawalo duplikaty relacji `ZAWIERA` i `NASTAPILA_PO`. Dodano sprawdzenie `in envelope.relacje` przed append.
+
+### P9: Etykiety wezlow encji w Memgraph
+
+`_label_for_id` w `memgraph.py` obsluguje 12 prefiksow id (run, stacja, zmienna, podproblem, decyzja, krok, zmiana, twierdzenie, werdykt, wymiar, wniosek, checkpoint). Bez tego wezly encji tworzone byly bez labela, uniemozliwiajac zapytania audytowe.
+
+### P10: Sciezka i timestamp_end w wezle Run
+
+`write_run_node` wywolywane po stacji `inicjuj` aktualizuje `sciezka` z manifestu (nie hardcoded 'pelny'). `close_run_node` przyjmuje `timestamp_end` z manifestu.

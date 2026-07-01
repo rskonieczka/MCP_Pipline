@@ -1,0 +1,65 @@
+run_id: 2026-07-01-analiza-projektu-i
+zamiar: Analiza projektu i propozycje 3 funkcjonalnosci zwiekszajacych efektywnosc
+  MCP
+sciezka: doglebny
+iteracja_bramki: 0
+status_runu: zakonczony
+timestamp_start: '2026-07-01T13:53:59.868389'
+timestamp_end: '2026-07-01T14:03:14.782039'
+stacje:
+- stacja: inicjuj
+  status: zakonczona
+  timestamp: '2026-07-01T13:54:20.114939'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_inicjuj.yaml
+- stacja: zmienne
+  status: zakonczona
+  timestamp: '2026-07-01T13:56:28.705992'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_zmienne.yaml
+- stacja: analiza
+  status: zakonczona
+  timestamp: '2026-07-01T13:57:11.809308'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_analiza.yaml
+- stacja: dekompozycja
+  status: zakonczona
+  timestamp: '2026-07-01T13:57:30.117614'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_dekompozycja.yaml
+- stacja: dobierz
+  status: zakonczona
+  timestamp: '2026-07-01T13:58:30.127818'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_dobierz.yaml
+- stacja: routing
+  status: zakonczona
+  timestamp: '2026-07-01T13:58:39.900489'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_routing.yaml
+- stacja: planuj
+  status: zakonczona
+  timestamp: '2026-07-01T13:59:03.591933'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_planuj.yaml
+- stacja: realizuj
+  status: zakonczona
+  timestamp: '2026-07-01T14:00:49.594170'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_realizuj.yaml
+- stacja: weryfikacja
+  status: zakonczona
+  timestamp: '2026-07-01T14:01:30.056436'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_weryfikacja.yaml
+- stacja: sprawdzenie
+  status: zakonczona
+  timestamp: '2026-07-01T14:02:01.123864'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_sprawdzenie.yaml
+- stacja: ewaluacja
+  status: zakonczona
+  timestamp: '2026-07-01T14:02:32.491557'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_ewaluacja.yaml
+- stacja: utrwal
+  status: zakonczona
+  timestamp: '2026-07-01T14:02:45.703543'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_utrwal.yaml
+- stacja: monitoruj
+  status: zakonczona
+  timestamp: '2026-07-01T14:03:03.416757'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_monitoruj.yaml
+- stacja: audyt_runu
+  status: zakonczona
+  timestamp: '2026-07-01T14:09:57.360679'
+  checkpoint: /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/.ai-kb/pipeline-runs/2026-07-01-analiza-projektu-i/stan_audyt_runu.yaml

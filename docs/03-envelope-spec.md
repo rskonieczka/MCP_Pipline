@@ -104,8 +104,8 @@ KOPERTA:
     status: gotowy | wnioskowane | niekompletne
     akcja_naprawcza: ""       # gdy niekompletne: pytanie do uzytkownika / agent_inference / powrot
   relacje:                    # jawne relacje miedzy encjami w run'ie (zapisywane do Memgraph)
-    - zrodlo: "stacja:zmienne"
-      cel: "stacja:analiza"
+    - zrodlo: "stacja:analiza"
+      cel: "stacja:zmienne"
       typ: nastapila_po
       pola: [analysis_object.name]
     - zrodlo: "zmienna:V001"

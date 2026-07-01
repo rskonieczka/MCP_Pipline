@@ -349,7 +349,7 @@ def close_run(run_id: str, workspace: str = "") -> dict[str, Any]:
 
     # Zamknij wezel Run w Memgraph
     from . import memgraph
-    memgraph.close_run_node(run_id)
+    memgraph.close_run_node(run_id, manifest.timestamp_end or "")
 
     return {
         "run_id": run_id,
@@ -444,6 +444,9 @@ def execute_station(
     station_written = memgraph.write_station_node(
         run_id, station, "zakonczona", checkpoint_path
     )
+    # Po stacji inicjuj zaktualizuj sciezke we wezle Run
+    if station == "inicjuj":
+        memgraph.write_run_node(run_id, envelope.stan.zamiar, manifest.sciezka)
     relations_written = memgraph.write_relations_from_envelope(run_id, envelope)
     # A6: memgraph_written=true tylko gdy oba zapisy powiodly sie
     memgraph_written = station_written and relations_written

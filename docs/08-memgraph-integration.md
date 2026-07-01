@@ -41,7 +41,7 @@ Memgraph jest opcjonalny. Jesli niedostepny, serwer kontynuuje bez zapisu grafu 
 | Krawedz | Od | Do | Wlasciwosci |
 |---|---|---|---|
 | `ZAWIERA` | Run | Stacja | - |
-| `NASTAPILA_PO` | Stacja | Stacja | iteracja_bramki |
+| `NASTAPILA_PO` | Stacja (aktualna) | Stacja (poprzednia) | iteracja_bramki |
 | `WYPRODUKOWALA` | Stacja | Zmienna/Decyzja/Werdykt/Wniosek | - |
 | `ZALEZY_OD` | Zmienna | Zmienna | - |
 | `OPARTA_NA` | Decyzja | Zmienna | - |
@@ -71,31 +71,51 @@ class MemgraphClient:
     def write_run_node(self, run_id: str, zamiar: str, sciezka: str):
         with self.driver.session() as session:
             session.run(
-                "CREATE (r:Run {run_id: $run_id, zamiar: $zamiar, "
-                "sciezka: $sciezka, status: 'w_trakcie', "
-                "timestamp_start: datetime()})",
-                run_id=run_id, zamiar=zamiar, sciezka=sciezka
+                "MERGE (r:Run {id: $run_node_id}) "
+                "SET r.run_id = $run_id, r.zamiar = $zamiar, "
+                "r.sciezka = $sciezka, r.status = 'w_trakcie'",
+                run_node_id=f"run:{run_id}", run_id=run_id,
+                zamiar=zamiar, sciezka=sciezka
             )
 
     def write_station_node(self, run_id: str, station: str,
                            status: str, checkpoint: str):
         with self.driver.session() as session:
             session.run(
-                "CREATE (s:Stacja {run_id: $run_id, stacja: $station, "
-                "status: $status, timestamp: datetime(), "
-                "checkpoint: $checkpoint})",
-                run_id=run_id, station=station,
-                status=status, checkpoint=checkpoint
+                "MERGE (s:Stacja {id: $station_id}) "
+                "SET s.run_id = $run_id, s.stacja = $station, "
+                "s.status = $status, s.checkpoint = $checkpoint",
+                station_id=f"stacja:{station}", run_id=run_id,
+                station=station, status=status, checkpoint=checkpoint
             )
 
     def write_relation(self, source: str, target: str,
                        rel_type: str, fields: list = None):
+        # MERGE wezlow z labelami na podstawie konwencji id
+        source_label = _label_for_id(source)
+        target_label = _label_for_id(target)
         with self.driver.session() as session:
             session.run(
-                f"MATCH (a {{id: $source}}), (b {{id: $target}}) "
-                f"CREATE (a)-[:{rel_type}]->(b)",
+                f"MERGE (a:{source_label} {{id: $source}}) "
+                f"MERGE (b:{target_label} {{id: $target}}) "
+                f"MERGE (a)-[:{rel_type}]->(b)",
                 source=source, target=target
             )
+
+    def close_run_node(self, run_id: str, timestamp_end: str = ""):
+        with self.driver.session() as session:
+            if timestamp_end:
+                session.run(
+                    "MERGE (r:Run {id: $run_node_id}) "
+                    "SET r.status = 'zakonczony', r.timestamp_end = $timestamp_end",
+                    run_node_id=f"run:{run_id}", timestamp_end=timestamp_end
+                )
+            else:
+                session.run(
+                    "MERGE (r:Run {id: $run_node_id}) "
+                    "SET r.status = 'zakonczony'",
+                    run_node_id=f"run:{run_id}"
+                )
 
     def write_relations_from_envelope(self, run_id: str, relacje: list):
         for rel in relacje:
@@ -136,8 +156,9 @@ MATCH (s:Stacja) WHERE NOT (s)<-[:ZAWIERA]-(:Run)
 RETURN s.run_id, s.stacja
 
 // Stacje bez poprzednika (oprocz inicjuj)
-MATCH (s:Stacja {stacja: 'zmienne'})
-WHERE NOT (s)-[:NASTAPILA_PO]->(:Stacja {stacja: 'inicjuj'})
+// Kierunek NASTAPILA_PO: aktualna -> poprzednia
+MATCH (s:Stacja {stacja: 'zmienne', run_id: $run_id})
+WHERE NOT (s)-[:NASTAPILA_PO]->(:Stacja {stacja: 'inicjuj', run_id: $run_id})
 RETURN s.run_id
 
 // Brakujace krawedzie ZAWIERA

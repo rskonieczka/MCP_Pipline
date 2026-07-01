@@ -153,10 +153,23 @@ def write_relation(
 
 def _label_for_id(node_id: str) -> str:
     """Zwraca label dla wezla na podstawie konwencji id."""
-    if node_id.startswith("run:"):
-        return "Run"
-    if node_id.startswith("stacja:"):
-        return "Stacja"
+    _LABEL_MAP = {
+        "run:": "Run",
+        "stacja:": "Stacja",
+        "zmienna:": "Zmienna",
+        "podproblem:": "Podproblem",
+        "decyzja:": "Decyzja",
+        "krok:": "KrokPlanu",
+        "zmiana:": "Zmiana",
+        "twierdzenie:": "Twierdzenie",
+        "werdykt:": "Werdykt",
+        "wymiar:": "WymiarAudytu",
+        "wniosek:": "Wniosek",
+        "checkpoint:": "Checkpoint",
+    }
+    for prefix, label in _LABEL_MAP.items():
+        if node_id.startswith(prefix):
+            return label
     return ""
 
 
@@ -174,7 +187,7 @@ def write_relations_from_envelope(run_id: str, envelope: Envelope) -> bool:
     return success
 
 
-def close_run_node(run_id: str) -> bool:
+def close_run_node(run_id: str, timestamp_end: str = "") -> bool:
     """Oznacza wezel Run jako zakonczony. Tworzy wezel jesli nie istnieje."""
     driver = _get_driver()
     if driver is None:
@@ -182,12 +195,20 @@ def close_run_node(run_id: str) -> bool:
 
     try:
         run_node_id = f"run:{run_id}"
-        with driver.session() as session:
-            session.run(
-                "MERGE (r:Run {id: $run_node_id}) "
-                "SET r.status = 'zakonczony'",
-                run_node_id=run_node_id,
-            )
+        if timestamp_end:
+            with driver.session() as session:
+                session.run(
+                    "MERGE (r:Run {id: $run_node_id}) "
+                    "SET r.status = 'zakonczony', r.timestamp_end = $timestamp_end",
+                    run_node_id=run_node_id, timestamp_end=timestamp_end,
+                )
+        else:
+            with driver.session() as session:
+                session.run(
+                    "MERGE (r:Run {id: $run_node_id}) "
+                    "SET r.status = 'zakonczony'",
+                    run_node_id=run_node_id,
+                )
         return True
     except Exception as e:
         logger.warning(f"Blad zamykania wezla Run: {e}")
