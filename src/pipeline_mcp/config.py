@@ -6,6 +6,32 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+# Położenie tego pliku - używane do autodetekcji workspace (patrz _detect_workspace).
+# Dla editable install: <workspace>/src/pipeline_mcp/config.py
+_THIS_FILE = Path(__file__).resolve()
+
+
+def _detect_workspace() -> Path | None:
+    """Wykrywa workspace pakietu z położenia editable-install.
+
+    Dla editable install struktura to: <workspace>/src/pipeline_mcp/<plik>.
+    Zwraca <workspace>, jeśli istnieje tam pyproject.toml (potwierdzenie, że to
+    katalog projektu). W przeciwnym razie None (instalacja systemowa/site-packages
+    - wtedy fallback do os.getcwd()).
+
+    Pozwala to serwerowi MCP działać poprawnie niezależnie od cwd procesu rodzica
+    (Windsurf/Devin), bo workspace jest wnioskowany z położenia kodu pakietu.
+    """
+    if (
+        _THIS_FILE.parent.name == "pipeline_mcp"
+        and _THIS_FILE.parent.parent.name == "src"
+    ):
+        ws = _THIS_FILE.parents[2]
+        if (ws / "pyproject.toml").exists():
+            return ws
+    return None
+
+
 def _env(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 
@@ -73,14 +99,18 @@ class Config:
 
     @property
     def runs_dir(self) -> Path:
-        """Zwraca katalog run'ow rozwiazany wzgledem cwd (workspace).
+        """Zwraca katalog run'ow rozwiazany wzgledem workspace.
 
-        Jesli PIPELINE_RUNS_DIR jest wzgledna, rozwiazuje ja wzgledem os.getcwd().
+        Jesli PIPELINE_RUNS_DIR jest wzgledna, rozwiazuje ja wzgledem workspace
+        wykrytego z położenia editable-install pakietu (patrz _detect_workspace).
+        Jesli autodetekcja zawiedzie (instalacja systemowa), fallback do os.getcwd().
         Jesli absolutna, uzywa jak jest.
         """
         path = Path(self.runs_dir_raw)
         if not path.is_absolute():
-            path = Path.cwd() / path
+            ws = _detect_workspace()
+            base = ws if ws is not None else Path.cwd()
+            path = base / path
         return path.resolve()
 
     def runs_dir_for(self, workspace: str | None = None) -> Path:

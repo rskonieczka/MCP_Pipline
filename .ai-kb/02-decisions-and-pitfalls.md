@@ -38,9 +38,13 @@
 
 ### D7: PIPELINE_RUNS_DIR wzgledne wzgledem workspace
 
-**Dlaczego**: Serwer ma dzialac dla wielu projektow. `PIPELINE_RUNS_DIR=.ai-kb/pipeline-runs` (wzgledna) rozwiazywana wzgledem `os.getcwd()` (workspace). Dodatkowo kazde narzedzie MCP ma opcjonalny parametr `workspace` do nadpisania. Brak `cwd` w konfiguracji MCP - Windsurf ustawia cwd na workspace automatycznie.
+**Dlaczego**: Serwer ma dzialac dla wielu projektow. `PIPELINE_RUNS_DIR=.ai-kb/pipeline-runs` (wzgledna) rozwiazywana wzgledem workspace wykrytego z położenia editable-install pakietu (`_detect_workspace()` w `config.py`): dla editable install struktura to `<workspace>/src/pipeline_mcp/<plik>`, więc workspace = `Path(__file__).parents[2]` (potwierdzone istnieniem `pyproject.toml`). Fallback do `os.getcwd()` przy instalacji systemowej. Dodatkowo kazde narzedzie MCP ma opcjonalny parametr `workspace` do nadpisania.
 
-**Alternatywy odrzucone**: Sztywna sciezka absolutna (jedna per serwer - nie obsluguje wielu projektow), zmienna srodowiskowa per workspace (wymaga restartu serwera przy zmianie projektu).
+**Dlaczego autodetekcja, nie `cwd` w mcp_config.json**: Windsurf i Devin **NIE** ustawiaja cwd na workspace automatycznie - proces MCP dziedziczy cwd po rodzicu (zwykle `~`). Hardcodowane `cwd` w globalnym `mcp_config.json` znaczyloby, że wszystkie projekty pisza do jednego katalogu (łamie wieloprojektowosc). Autodetekcja z `__file__` pozwala jednemu wpisowi MCP obslugiwac wiele workspace'ow, bo workspace jest wnioskowany z położenia kodu pakietu, nie z cwd procesu.
+
+**Wymog**: W kazdym projekcie, w ktorym pipeline ma byc uzywany, pakiet musi byc zainstalowany editable (`pip install -e <sciezka_do_Pipline>`) w `.venv` tego projektu, a wpis MCP musi wskazywac ten `.venv`. Wowczas `_detect_workspace()` poprawnie zwroci ten workspace.
+
+**Alternatywy odrzucone**: Sztywna sciezka absolutna w `PIPELINE_RUNS_DIR` (jedna per serwer - nie obsluguje wielu projektow), hardcodowane `cwd` w globalnym `mcp_config.json` (lamie wieloprojektowosc - wszystkie runy z kazdego projektu trafilyby do jednego katalogu), zmienna srodowiskowa per workspace (wymaga restartu serwera przy zmianie projektu).
 
 ### D8: Auto-inicjalizacja przez prompt MCP
 
