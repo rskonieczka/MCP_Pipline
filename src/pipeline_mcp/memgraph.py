@@ -6,12 +6,16 @@ Jesli niedostepny, serwer kontynuuje bez zapisu grafu.
 from __future__ import annotations
 
 import logging
-from typing import Any
+import re
 
 from .config import get_config
-from .models import Envelope, MemgraphUnavailableError
+from .models import Envelope
 
 logger = logging.getLogger(__name__)
+
+# Dozwolony format typu relacji po normalizacji (ochrona przed Cypher injection,
+# bo typ relacji nie moze byc parametrem zapytania)
+_REL_TYPE_RE = re.compile(r"[A-Z_][A-Z0-9_]*")
 
 # Lazy import neo4j
 _driver = None
@@ -86,15 +90,16 @@ def write_station_node(
 ) -> bool:
     """Zapisuje wezel Stacja do Memgraph.
 
-    Uzywa konwencji id='stacja:<name>' spojnej z write_relation,
-    aby relacje i wezly strukturalne wskazywaly na ten sam wezel.
+    Uzywa konwencji id='stacja:<run_id>:<name>' spojnej z write_relation
+    i add_station_relations. Wezel stacji jest per run - dzieki temu
+    statusy i relacje NASTAPILA_PO roznych run'ow nie mieszaja sie.
     """
     driver = _get_driver()
     if driver is None:
         return False
 
     try:
-        station_id = f"stacja:{station}"
+        station_id = f"stacja:{run_id}:{station}"
         with driver.session() as session:
             session.run(
                 "MERGE (s:Stacja {id: $station_id}) "
@@ -126,6 +131,13 @@ def write_relation(
 
     try:
         rel_type_safe = rel_type.upper().replace("-", "_")
+        # Typ relacji jest interpolowany do zapytania - waliduj whitelista
+        if not _REL_TYPE_RE.fullmatch(rel_type_safe):
+            logger.warning(
+                f"Odrzucono relacje {source}->{target}: "
+                f"nieprawidlowy typ relacji '{rel_type}'"
+            )
+            return False
         # Okresl labeli na podstawie konwencji id
         source_label = _label_for_id(source)
         target_label = _label_for_id(target)
@@ -134,11 +146,11 @@ def write_relation(
             # MERGE wezlow z opcjonalnymi labelami i id
             source_clause = (
                 f"MERGE (a:{source_label} {{id: $source}})"
-                if source_label else "MERGE (a {{id: $source}})"
+                if source_label else "MERGE (a {id: $source})"
             )
             target_clause = (
                 f"MERGE (b:{target_label} {{id: $target}})"
-                if target_label else "MERGE (b {{id: $target}})"
+                if target_label else "MERGE (b {id: $target})"
             )
             session.run(
                 f"{source_clause} {target_clause} "

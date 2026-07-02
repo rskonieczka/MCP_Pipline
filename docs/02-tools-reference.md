@@ -234,7 +234,7 @@ quality_gate(
     loop_target: str = ""  # opcjonalne: "dobierz" | "planuj" (gdzie wrocic)
 ) -> {
     run_id: str,
-    gate_decision: "przejdz" | "powrot" | "eskylacja",
+    gate_decision: "przejdz" | "powrot" | "eskalacja",
     iteracja_bramki: int,
     next_station: str | null,
     loop_target: str | null,

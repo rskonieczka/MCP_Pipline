@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 from .config import get_config
-from .envelope import serialize_envelope, deserialize_envelope
+from .envelope import serialize_envelope
 from .models import CheckpointNotFoundError, Envelope
 
 
@@ -40,13 +40,8 @@ def save_checkpoint(
     return str(checkpoint_path)
 
 
-def load_checkpoint(
-    run_id: str, station: str, suffix: str = "", workspace: str | None = None,
-) -> Envelope:
-    """Odczytuje koperte z pliku checkpointu."""
-    config = get_config()
-    checkpoint_path = config.checkpoint_path(run_id, station, suffix, workspace)
-
+def _load_envelope_file(checkpoint_path: Path) -> Envelope:
+    """Odczytuje koperte bezposrednio z pliku checkpointu."""
     if not checkpoint_path.exists():
         raise CheckpointNotFoundError(
             f"Checkpoint nie istnieje: {checkpoint_path}"
@@ -59,6 +54,14 @@ def load_checkpoint(
     data.pop("_checkpoint", None)
 
     return Envelope(**data)
+
+
+def load_checkpoint(
+    run_id: str, station: str, suffix: str = "", workspace: str | None = None,
+) -> Envelope:
+    """Odczytuje koperte z pliku checkpointu."""
+    config = get_config()
+    return _load_envelope_file(config.checkpoint_path(run_id, station, suffix, workspace))
 
 
 def list_checkpoints(run_id: str, workspace: str | None = None) -> list[dict]:
@@ -114,8 +117,8 @@ def get_latest_checkpoint(
             if s.status == "zakonczona" and s.checkpoint:
                 cp_path = Path(s.checkpoint)
                 if cp_path.exists():
-                    envelope = load_checkpoint(run_id, s.stacja, "", workspace)
-                    return s.stacja, envelope
+                    # Czytaj plik wskazany w manifescie (moze miec sufiks _iterN)
+                    return s.stacja, _load_envelope_file(cp_path)
 
     # Fallback: sortuj po timestamp pliku (mtime)
     checkpoints = list_checkpoints(run_id, workspace)

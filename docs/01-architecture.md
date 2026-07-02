@@ -211,7 +211,7 @@ Skille sa ladowane przez `importlib.resources` (Python 3.9+), co umozliwia doste
 4. Agent: execute_station(run_id, "inicjuj", output={klasyfikacja, punkt_wejscia, ...})
    Serwer: waliduje wyjscie inicjuj
    Serwer: aktualizuje koperte (pola_stacji.inicjuj, stan)
-   Serwer: zapisuje checkpoint stan_00_inicjuj.yaml
+   Serwer: zapisuje checkpoint stan_inicjuj.yaml
    Serwer: aktualizuje manifest (inicjuj: zakonczona)
    Serwer: zapisuje relacje do Memgraph
    Serwer: wyznacza nastepna stacje na podstawie klasyfikacji
@@ -254,17 +254,17 @@ Skille sa ladowane przez `importlib.resources` (Python 3.9+), co umozliwia doste
 .ai-kb/pipeline-runs/
   <run_id>/
     manifest.yaml              # indeks stacji, statusy, sciezka, iteracja bramki
-    stan_00_inicjuj.yaml       # checkpoint po inicjuj
-    stan_01_zmienne.yaml       # checkpoint po zmienne
-    stan_02_analiza.yaml
-    stan_03_dekompozycja.yaml  # tylko sciezka doglebny
-    stan_04_dobierz.yaml
-    stan_04_dobierz_iter1.yaml # checkpoint po 1. iteracji bramki
-    stan_05_routing.yaml       # tylko sciezka doglebny
-    stan_06_planuj.yaml
-    stan_07_realizuj.yaml
-    stan_08_weryfikacja.yaml
-    stan_09_sprawdzenie.yaml
+    stan_inicjuj.yaml       # checkpoint po inicjuj
+    stan_zmienne.yaml       # checkpoint po zmienne
+    stan_analiza.yaml
+    stan_dekompozycja.yaml  # tylko sciezka doglebny
+    stan_dobierz.yaml
+    stan_dobierz_iter1.yaml # checkpoint po 1. iteracji bramki
+    stan_routing.yaml       # tylko sciezka doglebny
+    stan_planuj.yaml
+    stan_realizuj.yaml
+    stan_weryfikacja.yaml
+    stan_sprawdzenie.yaml
     stan_10_ewaluacja.yaml     # tylko sciezka doglebny
     stan_11_utrwal.yaml
     stan_12_monitoruj.yaml     # tylko sciezka doglebny

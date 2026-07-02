@@ -10,9 +10,8 @@ from .models import (
     ContractValidationResult,
     Envelope,
     StationNotFoundError,
-    ValidationStatus,
 )
-from .stations import STATIONS, get_station
+from .stations import STATIONS
 
 
 # Mapowanie pol wejscia stacji docelowej na zrodlo w kopercie.
@@ -137,10 +136,7 @@ def validate_input(target_station: str, envelope: Envelope) -> ContractValidatio
 
     # Ustal status walidacji
     if not pola_brakujace:
-        if pola_wnioskowane:
-            status = ValidationStatus.WNISKOWANE if False else "wnioskowane"
-        else:
-            status = "gotowy"
+        status = "wnioskowane" if pola_wnioskowane else "gotowy"
     else:
         status = "niekompletne"
 

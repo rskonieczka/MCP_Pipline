@@ -45,6 +45,14 @@ def _env_bool(key: str, default: bool = False) -> bool:
     return default
 
 
+def _env_int(key: str, default: int) -> int:
+    """Odczyt int z env; nieprawidlowa wartosc nie wywala serwera przy starcie."""
+    try:
+        return int(os.environ.get(key, "") or default)
+    except ValueError:
+        return default
+
+
 @dataclass
 class Config:
     """Konfiguracja serwera wczytywana z env vars.
@@ -76,7 +84,7 @@ class Config:
         default_factory=lambda: _env("PIPELINE_LLM_BASE_URL", "")
     )
     llm_max_tokens: int = field(
-        default_factory=lambda: int(_env("PIPELINE_LLM_MAX_TOKENS", "4096"))
+        default_factory=lambda: _env_int("PIPELINE_LLM_MAX_TOKENS", 4096)
     )
     llm_system_prompt: str = field(
         default_factory=lambda: _env(

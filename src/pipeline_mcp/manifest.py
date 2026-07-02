@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from .models import Manifest, RunStatus, StacjaManifest, StationStatus
+from .models import Manifest, StacjaManifest, StationStatus
 
 
 def create_manifest(run_id: str, zamiar: str, sciezka: str = "pelny") -> Manifest:

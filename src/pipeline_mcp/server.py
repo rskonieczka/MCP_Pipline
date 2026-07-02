@@ -5,6 +5,7 @@ Glowny punkt wejscia. Rejestruje wszystkie narzedzia MCP.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from typing import Any
 
@@ -30,17 +31,11 @@ from .manifest import (
     update_station_status,
 )
 from .models import (
-    ContractValidationResult,
     Envelope,
-    ExecuteStationResult,
     Manifest,
-    NextStationResult,
     PipelineError,
-    QualityGateResult,
     RunNotFoundError,
     RunClosedError,
-    StartRunResult,
-    StationContract,
     StationNotFoundError,
     StationAlreadyDoneError,
 )
@@ -56,14 +51,10 @@ from .quality_gate import evaluate_gate, get_gate_history
 from .routing import (
     determine_path,
     get_next_station as routing_get_next_station,
-    get_post_gate_station,
-    get_station_sequence,
-    is_last_station,
     is_station_in_path,
 )
 from .stations import STATIONS, get_station, station_exists
 from .skills_loader import (
-    get_skill_prompt,
     list_available_skills,
     load_skill,
     verify_skills_integrity,
@@ -108,7 +99,11 @@ mcp = FastMCP("Pipeline MCP Server", instructions=PIPELINE_INSTRUCTIONS)
 
 
 def _generate_run_id(zamiar: str) -> str:
-    """Generuje run_id w formacie <YYYY-MM-DD>-<skrot-zamiaru>."""
+    """Generuje run_id w formacie <YYYY-MM-DD>-<skrot-zamiaru>.
+
+    Skrot jest sanityzowany do [a-z0-9-], aby run_id byl bezpieczna
+    nazwa katalogu (bez separatorow sciezek i znakow specjalnych).
+    """
     date_str = datetime.now().strftime("%Y-%m-%d")
     # Skrot zamiaru: pierwsze 3 slowa, max 30 znakow, bez polskich znakow
     import unicodedata
@@ -116,23 +111,23 @@ def _generate_run_id(zamiar: str) -> str:
     ascii_zamiar = normalized.encode("ascii", "ignore").decode()
     words = ascii_zamiar.lower().split()
     skrot = "-".join(words[:3])[:30]
-    skrot = skrot.replace(".", "").replace(",", "").replace("?", "")
+    skrot = re.sub(r"[^a-z0-9-]", "", skrot)
+    skrot = re.sub(r"-{2,}", "-", skrot).strip("-")
     return f"{date_str}-{skrot}" if skrot else f"{date_str}-run"
 
 
-def _load_run(run_id: str, workspace: str | None = None) -> tuple[Manifest, Envelope]:
-    """Odczytuje manifest i ostatnia koperte dla run'u."""
+def _unique_run_id(run_id: str, workspace: str | None) -> str:
+    """Zapewnia unikalnosc run_id - przy kolizji dodaje sufiks -2, -3, ...
+
+    Chroni istniejace run'y przed nadpisaniem manifestu.
+    """
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, workspace))
-
-    # Zaladuj ostatni checkpoint
-    latest = get_latest_checkpoint(run_id, workspace)
-    if latest:
-        _, envelope = latest
-    else:
-        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka)
-
-    return manifest, envelope
+    if not config.manifest_path(run_id, workspace).exists():
+        return run_id
+    counter = 2
+    while config.manifest_path(f"{run_id}-{counter}", workspace).exists():
+        counter += 1
+    return f"{run_id}-{counter}"
 
 
 def _ensure_run_open(manifest: Manifest) -> None:
@@ -171,7 +166,7 @@ def start_run(
         raise PipelineError("Zamiar jest wymagany")
 
     config = get_config()
-    run_id = _generate_run_id(zamiar)
+    run_id = _unique_run_id(_generate_run_id(zamiar), ws)
 
     # Utworz katalog run'u
     run_dir = config.run_dir(run_id, ws)
@@ -185,6 +180,17 @@ def start_run(
     # Utworz pusta koperte
     envelope = create_envelope(run_id, zamiar, sciezka="pelny")
 
+    # Zapisz wejscie uzytkownika do koperty (kontrakt stacji inicjuj:
+    # KONTEKST, ZRODLA, TRYB_INICJACJI) i utrwal jako checkpoint inicjalny.
+    wejscie = {
+        "kontekst": kontekst,
+        "zrodla": zrodla or [],
+        "tryb_inicjacji": tryb_inicjacji,
+    }
+    if any([kontekst, zrodla]):
+        envelope.pola_stacji["_wejscie"] = wejscie
+        save_checkpoint(run_id, "_start", envelope, "", ws)
+
     # Zapisz wezel Run do Memgraph (A1: strukturalny wezel grafu)
     from . import memgraph
     memgraph.write_run_node(run_id, zamiar, "pelny")
@@ -193,6 +199,7 @@ def start_run(
         "run_id": run_id,
         "first_station": "inicjuj",
         "manifest_path": str(config.manifest_path(run_id, ws)),
+        "wejscie": wejscie,
         "envelope": envelope.model_dump(),
     }
 
@@ -336,6 +343,17 @@ def close_run(run_id: str, workspace: str = "") -> dict[str, Any]:
     config = get_config()
     manifest = load_manifest(config.manifest_path(run_id, ws))
 
+    # Idempotencja: ponowne zamkniecie nie nadpisuje timestamp_end
+    if manifest.status_runu == "zakonczony":
+        return {
+            "run_id": run_id,
+            "status": "zakonczony",
+            "envelope_final_path": str(config.envelope_final_path(run_id, ws)),
+            "stacje_wykonane": len([s for s in manifest.stacje if s.status == "zakonczona"]),
+            "iteracje_bramki": manifest.iteracja_bramki,
+            "already_closed": True,
+        }
+
     # Zaladuj ostatnia koperte
     latest = get_latest_checkpoint(run_id, ws)
     envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka)
@@ -397,11 +415,13 @@ def execute_station(
     if station != "audyt_runu":
         _ensure_run_open(manifest)
 
-    # Sprawdz czy stacja juz zakonczona
+    # Sprawdz czy stacja juz zakonczona (po powrocie bramki statusy stacji
+    # petli sa resetowane na 'w_trakcie', wiec ponowne wykonanie jest dozwolone)
     existing_status = get_station_status(manifest, station)
     if existing_status == "zakonczona" and not skip_validation:
         raise StationAlreadyDoneError(
-            f"Stacja '{station}' juz zakonczona w run'u {run_id}"
+            f"Stacja '{station}' juz zakonczona w run'u {run_id}. "
+            "Aby wymusic ponowne wykonanie, uzyj skip_validation=True."
         )
 
     # Zaladuj aktualna koperte
@@ -432,8 +452,10 @@ def execute_station(
         envelope.walidacja.status = validation.status  # type: ignore
         envelope.walidacja.akcja_naprawcza = validation.akcja_naprawcza
 
-    # Zapisz checkpoint
-    checkpoint_path = save_checkpoint(run_id, station, envelope, "", ws)
+    # Zapisz checkpoint (w petli bramki z sufiksem _iter<N>, aby nie nadpisac
+    # checkpointu z poprzedniej iteracji)
+    suffix = f"_iter{manifest.iteracja_bramki}" if manifest.iteracja_bramki > 0 else ""
+    checkpoint_path = save_checkpoint(run_id, station, envelope, suffix, ws)
 
     # Aktualizuj manifest
     manifest = update_station_status(manifest, station, "zakonczona", checkpoint_path)
@@ -490,7 +512,6 @@ def get_next_station(run_id: str, workspace: str = "") -> dict[str, Any]:
         }
 
     next_station = routing_get_next_station(last_station, manifest.sciezka)
-    is_last = is_last_station(last_station, manifest.sciezka) if next_station is None else False
 
     return {
         "run_id": run_id,
@@ -564,7 +585,6 @@ def get_station_contract(run_id: str, station: str, workspace: str = "") -> dict
     Returns:
         Kontrakt stacji z promptem wbudowanego skilla
     """
-    ws = workspace if workspace else None
     if not station_exists(station):
         raise StationNotFoundError(f"Stacja '{station}' nie istnieje")
 
@@ -860,6 +880,10 @@ def list_checkpoints_tool(run_id: str, workspace: str = "") -> list[dict[str, An
 # =====================================================================
 
 
+# Bezpiecznik petli auto-pilota (13 stacji + iteracje bramki + zapas)
+_AUTO_PILOT_MAX_STEPS = 40
+
+
 @mcp.tool
 def auto_pilot_start(
     run_id: str,
@@ -868,22 +892,116 @@ def auto_pilot_start(
     max_gate_iterations: int = 2,
     workspace: str = "",
 ) -> dict[str, Any]:
-    """Uruchamia tryb auto-pilot. Serwer sekwencyjnie wywoluje LLM dla kazdej stacji.
+    """Uruchamia tryb auto-pilot. Serwer synchronicznie wykonuje stacje,
+    wywolujac LLM dla kazdej z nich, az do konca sciezki lub blokady.
 
     Args:
         run_id: Identyfikator run'u
         from_station: Stacja startowa (puste = od nastepnej stacji)
         to_station: Stacja koncowa (puste = do konca pipeline'u)
-        max_gate_iterations: Max iteracji bramki (domyslnie 2)
+        max_gate_iterations: Max powrotow bramki tolerowanych przez auto-pilot
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
 
     Returns:
-        Status uruchomienia auto-pilota
+        Finalny status auto-pilota, wykonane stacje, bledy
     """
     ws = workspace if workspace else None
-    return auto_pilot.start_auto_pilot(
-        run_id, from_station, to_station, max_gate_iterations
-    )
+    config = get_config()
+    manifest = load_manifest(config.manifest_path(run_id, ws))
+    _ensure_run_open(manifest)
+
+    auto_pilot.start_auto_pilot(run_id, from_station, to_station, max_gate_iterations)
+
+    executed: list[str] = []
+    bledy: list[str] = []
+    final_status = "zakonczony"
+    gate_returns = 0
+    station: str | None = from_station or None
+
+    for _ in range(_AUTO_PILOT_MAX_STEPS):
+        if auto_pilot.is_stopped(run_id):
+            final_status = "zatrzymany"
+            break
+
+        manifest = load_manifest(config.manifest_path(run_id, ws))
+        if station is None:
+            last = get_last_completed_station(manifest)
+            station = routing_get_next_station(last, manifest.sciezka) if last else "inicjuj"
+        if station is None:
+            break  # koniec sciezki
+
+        # Zaladuj aktualna koperte
+        latest = get_latest_checkpoint(run_id, ws)
+        envelope = latest[1] if latest else create_envelope(
+            run_id, manifest.zamiar, manifest.sciezka
+        )
+
+        try:
+            output, _ = auto_pilot.execute_station_with_llm(run_id, station, envelope)
+        except Exception as e:
+            bledy.append(f"{station}: {e}")
+            auto_pilot.update_auto_pilot_state(run_id, station, "zablokowany", str(e))
+            final_status = "zablokowany"
+            break
+
+        # Brak bloku KOPERTA w wyjsciu LLM -> zatrzymaj (por. docs/07 krok 5)
+        if set(output.keys()) == {"_raw_output"}:
+            blad = f"{station}: LLM nie zwrocil bloku KOPERTA (blad parsowania)"
+            bledy.append(blad)
+            auto_pilot.update_auto_pilot_state(run_id, station, "zablokowany", blad)
+            final_status = "zablokowany"
+            break
+
+        exec_result = execute_station(
+            run_id, station, output, skip_validation=True, workspace=workspace
+        )
+        executed.append(station)
+        auto_pilot.update_auto_pilot_state(run_id, station, "zakonczona")
+
+        if to_station and station == to_station:
+            final_status = "zatrzymany"
+            break
+
+        # Bramka jakosci po stacji sprawdzenie
+        if station == "sprawdzenie":
+            audit_status = str(output.get("status_audytu", "niezgodny"))
+            gate = quality_gate(
+                run_id, audit_status, output.get("wymiary") or {}, "", workspace
+            )
+            if gate["gate_decision"] == "eskalacja":
+                final_status = "zablokowany"
+                bledy.append("Bramka jakosci: eskalacja po max iteracjach")
+                auto_pilot.update_auto_pilot_state(
+                    run_id, station, "zablokowany", "eskalacja bramki"
+                )
+                break
+            if gate["gate_decision"] == "powrot":
+                gate_returns += 1
+                if gate_returns > max_gate_iterations:
+                    final_status = "zablokowany"
+                    bledy.append(
+                        f"Auto-pilot: przekroczono limit {max_gate_iterations} powrotow bramki"
+                    )
+                    break
+            station = gate["next_station"]
+        else:
+            station = exec_result["next_station"]
+
+        if station is None:
+            break
+    else:
+        final_status = "zablokowany"
+        bledy.append(f"Przekroczono limit {_AUTO_PILOT_MAX_STEPS} krokow auto-pilota")
+
+    auto_pilot.finish_auto_pilot(run_id, final_status)
+
+    return {
+        "run_id": run_id,
+        "status": final_status,
+        "stacje_wykonane": executed,
+        "bledy": bledy,
+        "iteracja_bramki": load_manifest(config.manifest_path(run_id, ws)).iteracja_bramki,
+    }
 
 
 @mcp.tool
@@ -897,7 +1015,6 @@ def auto_pilot_status(run_id: str, workspace: str = "") -> dict[str, Any]:
     Returns:
         Status auto-pilota z lista wykonanych i pozostalych stacji
     """
-    ws = workspace if workspace else None
     status = auto_pilot.get_auto_pilot_status(run_id)
     return status.model_dump()
 
@@ -913,7 +1030,6 @@ def auto_pilot_stop(run_id: str, workspace: str = "") -> dict[str, Any]:
     Returns:
         Status zatrzymania
     """
-    ws = workspace if workspace else None
     return auto_pilot.stop_auto_pilot(run_id)
 
 

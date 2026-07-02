@@ -203,7 +203,7 @@ start_run(zamiar="Test instalacji")
 <PIPELINE_RUNS_DIR>/
   2026-06-29-test-instalacji/
     manifest.yaml
-    stan_00_inicjuj.yaml
+    stan_inicjuj.yaml
     ...
 ```
 

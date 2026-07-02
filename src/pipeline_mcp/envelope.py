@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Any
 
 from .models import Envelope, Relacja, Stan, Walidacja
-from .stations import STATIONS
 
 
 def create_envelope(run_id: str, zamiar: str, sciezka: str = "pelny") -> Envelope:
@@ -45,11 +44,15 @@ def accumulate_state(envelope: Envelope, station: str, output: dict[str, Any]) -
 def add_station_relations(
     envelope: Envelope, station: str, run_id: str
 ) -> Envelope:
-    """Dodaje relacje standardowe dla stacji (nastapila_po, zawiera)."""
+    """Dodaje relacje standardowe dla stacji (nastapila_po, zawiera).
+
+    Wezly stacji uzywaja konwencji id='stacja:<run_id>:<name>' (per run),
+    spojnej z memgraph.write_station_node.
+    """
     # Relacja: run -> stacja (zawiera) - deduplikacja
     zawiera = Relacja(
         zrodlo=f"run:{run_id}",
-        cel=f"stacja:{station}",
+        cel=f"stacja:{run_id}:{station}",
         typ="zawiera",
     )
     if zawiera not in envelope.relacje:
@@ -59,8 +62,8 @@ def add_station_relations(
     # Kierunek: aktualna stacja wskazuje na swoją poprzednią
     if envelope.stacja_poprzednia:
         nastapila = Relacja(
-            zrodlo=f"stacja:{station}",
-            cel=f"stacja:{envelope.stacja_poprzednia}",
+            zrodlo=f"stacja:{run_id}:{station}",
+            cel=f"stacja:{run_id}:{envelope.stacja_poprzednia}",
             typ="nastapila_po",
         )
         if nastapila not in envelope.relacje:

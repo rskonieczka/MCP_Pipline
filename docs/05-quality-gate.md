@@ -24,7 +24,13 @@ Audyt `sprawdzenie` zwraca `status_audytu: zgodny`.
 Audyt `sprawdzenie` zwraca `status_audytu: niezgodny`.
 
 - Iteracja 1 lub 2 -> powrot do `dobierz` lub `planuj`
-- Iteracja 3 -> eskalacja do uzytkownika
+- Iteracja 3 -> eskalacja do uzytkownika (run oznaczany jako `zablokowany`)
+
+Przy decyzji `powrot` serwer resetuje w manifescie statusy stacji od celu
+powrotu do `sprawdzenie` (na `w_trakcie`), dzieki czemu stacje petli mozna
+wykonac ponownie przez `execute_station` bez `skip_validation`. Checkpointy
+kolejnych iteracji zapisywane sa z sufiksem `_iter<N>` i nie nadpisuja
+checkpointow poprzedniej iteracji.
 
 ### 2.3. Wybor celu powrotu
 
@@ -57,7 +63,7 @@ def evaluate_gate(run_id: str, audit_status: str,
     # niezgodny
     if iteration >= MAX_GATE_ITERATIONS:
         return {
-            "gate_decision": "eskylacja",
+            "gate_decision": "eskalacja",
             "next_station": None,
             "iteracja_bramki": iteration,
             "komunikat": "Osiagnieto max 2 iteracje bramki. Wymagana interwencja uzytkownika."
@@ -99,15 +105,15 @@ Po powrocie bramki serwer zapisuje nowy checkpoint z sufiksem `_iter<N>`:
 
 ```
 .ai-kb/pipeline-runs/<run_id>/
-  stan_04_dobierz.yaml          # oryginalny checkpoint
-  stan_04_dobierz_iter1.yaml    # checkpoint po 1. iteracji bramki
-  stan_06_planuj.yaml           # oryginalny checkpoint planuj
-  stan_06_planuj_iter1.yaml     # checkpoint po 1. iteracji bramki
+  stan_dobierz.yaml          # oryginalny checkpoint
+  stan_dobierz_iter1.yaml    # checkpoint po 1. iteracji bramki
+  stan_planuj.yaml           # oryginalny checkpoint planuj
+  stan_planuj_iter1.yaml     # checkpoint po 1. iteracji bramki
 ```
 
 ## 5. Eskalacja
 
-Po 2 nieudanych iteracjach bramka zwraca `gate_decision: eskylacja`. Serwer:
+Po 2 nieudanych iteracjach bramka zwraca `gate_decision: eskalacja`. Serwer:
 
 1. Oznacza run jako `zablokowany` w manifeście
 2. Zapisuje checkpoint z sufiksem `_eskalacja`
@@ -126,7 +132,7 @@ Komunikat eskalacji zawiera:
 
 ```python
 quality_gate(run_id, audit_status, audit_wymiary={}, loop_target="") -> {
-    gate_decision: "przejdz" | "powrot" | "eskylacja",
+    gate_decision: "przejdz" | "powrot" | "eskalacja",
     iteracja_bramki: int,
     next_station: str | null,
     loop_target: str | null,
@@ -153,6 +159,6 @@ W trybie auto-pilot serwer obsluguje bramke automatycznie:
 1. Po `sprawdzenie` serwer wywoluje `quality_gate` z wynikiem audytu
 2. Jesli `powrot` -> serwer wywoluje LLM dla `loop_target` z zaktualizowana koperta
 3. Jesli `przejdz` -> serwer kontynuuje do nastepnej stacji
-4. Jesli `eskylacja` -> serwer zatrzymuje auto-pilot, zwraca status `zablokowany`
+4. Jesli `eskalacja` -> serwer zatrzymuje auto-pilot, zwraca status `zablokowany`
 
 Auto-pilot respektuje `max_gate_iterations` (domyslnie 2).

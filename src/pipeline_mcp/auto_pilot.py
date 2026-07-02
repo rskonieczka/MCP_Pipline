@@ -8,16 +8,13 @@ from typing import Any
 import yaml
 
 from .config import get_config
-from .envelope import get_envelope_summary
 from .llm import get_provider, is_configured
 from .models import (
     AutoPilotStatus,
     Envelope,
     LLMNotConfiguredError,
-    LLMOutputParseError,
 )
-from .quality_gate import evaluate_gate, MAX_GATE_ITERATIONS
-from .routing import get_next_station, is_last_station
+from .quality_gate import MAX_GATE_ITERATIONS
 from .skills_loader import get_skill_prompt
 
 logger = logging.getLogger(__name__)
@@ -142,6 +139,20 @@ def stop_auto_pilot(run_id: str) -> dict[str, Any]:
         "status": "zatrzymany",
         "stacja_zatrzymania": _auto_pilot_state.get(run_id, {}).get("stacja_aktualna", ""),
     }
+
+
+def finish_auto_pilot(run_id: str, status: str, error: str = "") -> None:
+    """Ustawia finalny status auto-pilota po zakonczeniu petli."""
+    if run_id not in _auto_pilot_state:
+        return
+    _auto_pilot_state[run_id]["status"] = status
+    if error:
+        _auto_pilot_state[run_id]["bledy"].append(error)
+
+
+def is_stopped(run_id: str) -> bool:
+    """Sprawdza czy auto-pilot zostal zatrzymany przez uzytkownika."""
+    return _auto_pilot_state.get(run_id, {}).get("status") == "zatrzymany"
 
 
 def get_auto_pilot_status(run_id: str) -> AutoPilotStatus:

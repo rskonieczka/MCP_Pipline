@@ -85,7 +85,7 @@ class MemgraphClient:
                 "MERGE (s:Stacja {id: $station_id}) "
                 "SET s.run_id = $run_id, s.stacja = $station, "
                 "s.status = $status, s.checkpoint = $checkpoint",
-                station_id=f"stacja:{station}", run_id=run_id,
+                station_id=f"stacja:{run_id}:{station}", run_id=run_id,
                 station=station, status=status, checkpoint=checkpoint
             )
 

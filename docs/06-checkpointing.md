@@ -8,18 +8,18 @@ Checkpointowanie umozliwia restart pipeline od dowolnej stacji oraz kompresje ko
 .ai-kb/pipeline-runs/
   <run_id>/
     manifest.yaml              # indeks stacji, statusy, sciezka, iteracja bramki
-    stan_00_inicjuj.yaml       # checkpoint po inicjuj
-    stan_01_zmienne.yaml       # checkpoint po zmienne
-    stan_02_analiza.yaml
-    stan_03_dekompozycja.yaml  # tylko sciezka doglebny
-    stan_04_dobierz.yaml
-    stan_04_dobierz_iter1.yaml # checkpoint po 1. iteracji bramki
-    stan_05_routing.yaml       # tylko sciezka doglebny
-    stan_06_planuj.yaml
-    stan_06_planuj_iter1.yaml  # checkpoint po iteracji bramki
-    stan_07_realizuj.yaml
-    stan_08_weryfikacja.yaml
-    stan_09_sprawdzenie.yaml
+    stan_inicjuj.yaml       # checkpoint po inicjuj
+    stan_zmienne.yaml       # checkpoint po zmienne
+    stan_analiza.yaml
+    stan_dekompozycja.yaml  # tylko sciezka doglebny
+    stan_dobierz.yaml
+    stan_dobierz_iter1.yaml # checkpoint po 1. iteracji bramki
+    stan_routing.yaml       # tylko sciezka doglebny
+    stan_planuj.yaml
+    stan_planuj_iter1.yaml  # checkpoint po iteracji bramki
+    stan_realizuj.yaml
+    stan_weryfikacja.yaml
+    stan_sprawdzenie.yaml
     stan_10_ewaluacja.yaml     # tylko sciezka doglebny
     stan_11_utrwal.yaml
     stan_12_monitoruj.yaml     # tylko sciezka doglebny
@@ -39,11 +39,11 @@ MANIFEST:
     - stacja: inicjuj
       status: zakonczona           # zakonczona | w_trakcie | zablokowana | pominieta
       timestamp: "2026-06-29T14:32:10"
-      checkpoint: stan_00_inicjuj.yaml
+      checkpoint: stan_inicjuj.yaml
     - stacja: zmienne
       status: zakonczona
       timestamp: "2026-06-29T14:35:22"
-      checkpoint: stan_01_zmienne.yaml
+      checkpoint: stan_zmienne.yaml
     - stacja: analiza
       status: w_trakcie
       timestamp: null
@@ -107,7 +107,7 @@ Po zakonczeniu pipeline'u (status `zakonczony` dla ostatniej stacji) katalog run
 Checkpoint jest plikiem YAML zawierajacym pelna koperte po zakonczeniu stacji:
 
 ```yaml
-# stan_01_zmienne.yaml
+# stan_zmienne.yaml
 run_id: "2026-06-29-weryfikacja-mechanizmu"
 sciezka: pelny
 stacja_aktualna: zmienne

@@ -13,7 +13,7 @@ Sciezka = Literal["szybki", "pelny", "doglebny"]
 Klasyfikacja = Literal["trywialne", "rutynowe", "zlozone"]
 StationStatus = Literal["zakonczona", "w_trakcie", "zablokowana", "pominieta"]
 RunStatus = Literal["w_trakcie", "zakonczony", "zablokowany"]
-GateDecision = Literal["przejdz", "powrot", "eskylacja"]
+GateDecision = Literal["przejdz", "powrot", "eskalacja"]
 ValidationStatus = Literal["gotowy", "wnioskowane", "niekompletne"]
 SourceType = Literal[
     "user_provided", "verified_source", "agent_inference", "hypothesis", "unavailable"

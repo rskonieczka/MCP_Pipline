@@ -111,10 +111,13 @@ def is_station_in_path(station: str, path: str) -> bool:
     return station in get_station_sequence(path)
 
 
-def get_post_gate_station(sciezka: str) -> str:
-    """Zwraca stacje po bramce jakosci (po sprawdzenie)."""
+def get_post_gate_station(sciezka: str) -> str | None:
+    """Zwraca stacje po bramce jakosci (po sprawdzenie).
+
+    Dla sciezki szybkiej 'sprawdzenie' jest ostatnia stacja - zwraca None.
+    """
     if sciezka == "pelny":
         return "utrwal"
     elif sciezka == "doglebny":
         return "ewaluacja"
-    return "utrwal"  # fallback
+    return None  # szybki: sprawdzenie konczy sciezke

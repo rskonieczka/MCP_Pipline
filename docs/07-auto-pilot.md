@@ -33,6 +33,13 @@ auto_pilot_status(run["run_id"])
 auto_pilot_stop(run["run_id"])
 ```
 
+Uwaga: wykonanie jest synchroniczne - `auto_pilot_start` blokuje do momentu
+zakonczenia sciezki, osiagniecia `to_station`, blokady lub eskalacji bramki
+i zwraca finalny status wraz z lista wykonanych stacji. `auto_pilot_status`
+sluzy do wgladu w stan po zakonczeniu (lub z innego klienta). Parametr
+`max_gate_iterations` ogranicza liczbe powrotow bramki tolerowanych przez
+auto-pilot, niezaleznie od limitu samej bramki.
+
 ## 3. Przeplyw wykonania
 
 ```
@@ -74,7 +81,7 @@ auto_pilot_start(run_id, from_station)
    +-- 8. Bramka jakosci
    |       przejdz -> wroc do kroku 1 (nastepna stacja)
    |       powrot -> wroc do kroku 1 (stacja loop_target)
-   |       eskylacja -> zatrzymaj auto-pilot (status: zablokowany)
+   |       eskalacja -> zatrzymaj auto-pilot (status: zablokowany)
    |
    v
 [Zakonczenie auto-pilota]
@@ -208,7 +215,7 @@ Zmienne srodowiskowe:
 | `LLM_API_ERROR` | Zatrzymaj auto-pilot, zwroc status `zablokowany` z opisem bledu |
 | `LLM_OUTPUT_PARSE_ERROR` | Zatrzymaj auto-pilot, zwroc status `zablokowany` z wyjsciem LLM |
 | `CONTRACT_INCOMPLETE` | Zatrzymaj auto-pilot, zwroc status `zablokowany` |
-| `GATE_MAX_ITERATIONS` | Zatrzymaj auto-pilot, zwrec status `zablokowany` (eskylacja) |
+| `GATE_MAX_ITERATIONS` | Zatrzymaj auto-pilot, zwrec status `zablokowany` (eskalacja) |
 | `MEMGRAPH_UNAVAILABLE` | Kontynuuj bez zapisu do Memgraph (ostrzezenie w statusie) |
 
 ## 9. Koszty i monitoring

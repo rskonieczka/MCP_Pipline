@@ -1,0 +1,6 @@
+- `mcp_call_tool` wymaga zawsze otoki: `server_name`, `tool_name`, `arguments`.
+- `server_name` jest wymagane przez parser klienta. Brak pola daje błąd `Failed to parse arguments for tool 'mcp_call_tool': missing field server_name` przed dotarciem do serwera MCP.
+- `arguments` musi być mapą/obiektem JSON. Jeśli agent zserializuje payload do stringa JSON, parser klienta zwraca `invalid type: string ..., expected a map`.
+- Dla serwera `pipeline` rozmiar payloadu nie jest sam w sobie przyczyną tego błędu. Kontrolne wywołania `start_run` i `execute_station` z małym poprawnym obiektem działają poprawnie.
+- Przy diagnostyce najpierw użyj `mcp_list_tools` dla docelowego serwera i porównaj kształt `arguments` ze schema `inputSchema` narzędzia.
+- Dla `pipeline.execute_station` poprawny kształt to obiekt zawierający co najmniej `run_id`, `station`, `output`, opcjonalnie `workspace` i `skip_validation`.
