@@ -64,6 +64,9 @@ class RTMEntry(BaseModel):
     zrodlo: str = "zamiar"
     stacje_adresujace: list[str] = Field(default_factory=list)
     stacja_weryfikujaca: str = ""
+    # U6: stacja, ktora oznaczyla wymaganie jako niespelnione (nie nadpisuje
+    # stacja_weryfikujaca, aby zachowac informacje o pierwotnej weryfikacji)
+    stacja_niespelnienia: str = ""
     status: RTMStatus = "nieadresowane"  # type: ignore
     artefakty: list[str] = Field(default_factory=list)
     checkpoint_weryfikacji: str = ""
@@ -81,6 +84,9 @@ class Envelope(BaseModel):
     walidacja: Walidacja = Field(default_factory=Walidacja)
     relacje: list[Relacja] = Field(default_factory=list)
     rtm: list[RTMEntry] = Field(default_factory=list)
+    # U8: wejscie uzytkownika z start_run (kontekst, zrodla, tryb_inicjacji) -
+    # nie w pola_stacji, bo _wejscie nie jest nazwa stacji
+    wejscie: dict[str, Any] = Field(default_factory=dict)
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -96,6 +102,16 @@ class StacjaManifest(BaseModel):
     checkpoint: str | None = None
 
 
+class GateHistoryEntry(BaseModel):
+    """Wpis historii iteracji bramki (U4)."""
+
+    iteracja: int
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    audit_status: str = ""
+    loop_target: str = ""
+    gate_decision: str = ""
+
+
 class Manifest(BaseModel):
     """Manifest run'u - indeks stacji, statusy, sciezka, iteracja bramki."""
 
@@ -107,6 +123,8 @@ class Manifest(BaseModel):
     timestamp_start: str = Field(default_factory=lambda: datetime.now().isoformat())
     timestamp_end: str | None = None
     stacje: list[StacjaManifest] = Field(default_factory=list)
+    # U4: historia iteracji bramki (pusta przy starcie, aktualizowana przez evaluate_gate)
+    historia_bramki: list[GateHistoryEntry] = Field(default_factory=list)
 
 
 # --- Run ---

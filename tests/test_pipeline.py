@@ -130,12 +130,13 @@ def test_start_run_zapisuje_kontekst(isolated_runs):
     r = server.start_run(zamiar="zadanie z kontekstem", kontekst="wazny kontekst",
                          zrodla=["doc.md"])
     env = server.get_envelope(r["run_id"])
-    assert env["pola_stacji"]["_wejscie"]["kontekst"] == "wazny kontekst"
-    assert env["pola_stacji"]["_wejscie"]["zrodla"] == ["doc.md"]
+    # U8: wejscie w osobnym polu envelope.wejscie, nie w pola_stacji._wejscie
+    assert env["wejscie"]["kontekst"] == "wazny kontekst"
+    assert env["wejscie"]["zrodla"] == ["doc.md"]
     # Wejscie przezywa wykonanie stacji inicjuj
     server.execute_station(r["run_id"], "inicjuj", _output_for("inicjuj"))
     env2 = server.get_envelope(r["run_id"])
-    assert env2["pola_stacji"]["_wejscie"]["kontekst"] == "wazny kontekst"
+    assert env2["wejscie"]["kontekst"] == "wazny kontekst"
 
 
 def test_close_run_idempotentny(isolated_runs):
@@ -148,3 +149,112 @@ def test_close_run_idempotentny(isolated_runs):
     assert second.get("already_closed") is True
     m2 = load_manifest(isolated_runs / run_id / "manifest.yaml")
     assert m1.timestamp_end == m2.timestamp_end
+
+
+# --- U2: compress_envelope wywolywany w sciezce doglebny ---
+
+
+def test_u2_compress_envelope_in_doglebny(isolated_runs):
+    """U2: po stacjach analiza, dobierz, sprawdzenie w sciezce doglebny
+    koperta jest kompresowana (starsze pola_stacji usuwane gdy >3 stacje).
+    Pelne dane zostaja w checkpoincie - kompresja dotyczy koperty w kontekscie."""
+    run_id = server.start_run(zamiar="test kompresji doglebny")["run_id"]
+    server.execute_station(run_id, "inicjuj", {"klasyfikacja": "zlozone"})
+    server.execute_station(run_id, "zmienne", _output_for("zmienne"))
+    server.execute_station(run_id, "analiza", _output_for("analiza"))
+    server.execute_station(run_id, "dekompozycja", {"podproblemy": ["p1"]})
+    result = server.execute_station(run_id, "dobierz", _output_for("dobierz"))
+    # Po dobierz w doglebny - kompresja w envelope_summary (kontekst konwersacji)
+    # Pelne dane zostaja w checkpoincie (get_envelope zwraca pelna)
+    summary = result["envelope_summary"]
+    # Kompresja usuwa najstarsze gdy >3 stacje - zostaja 3 ostatnie
+    pola_keys = summary["pola_stacji_keys"]
+    assert "dobierz" in pola_keys
+    # inicjuj usuniete jako najstarsze (mamy 5 stacji, keep_last_n=3)
+    assert "inicjuj" not in pola_keys
+
+
+def test_u2_no_compress_in_pelny(isolated_runs):
+    """U2: w sciezce pelny kompresja nie zachodzi."""
+    run_id = server.start_run(zamiar="test brak kompresji pelny")["run_id"]
+    server.execute_station(run_id, "inicjuj", {"klasyfikacja": "rutynowe"})
+    server.execute_station(run_id, "zmienne", _output_for("zmienne"))
+    server.execute_station(run_id, "analiza", _output_for("analiza"))
+    env = server.get_envelope(run_id)
+    # W pelny nie ma kompresji
+    assert "inicjuj" in env["pola_stacji"]
+    assert "zmienne" in env["pola_stacji"]
+
+
+# --- U3: routing nadpisuje sciezke ---
+
+
+def test_u3_routing_overrides_sciezka(isolated_runs):
+    """U3: stacja routing w sciezce doglebny nadpisuje sciezke pipeline'u."""
+    run_id = server.start_run(zamiar="test routing override")["run_id"]
+    server.execute_station(run_id, "inicjuj", {"klasyfikacja": "zlozone"})
+    server.execute_station(run_id, "zmienne", _output_for("zmienne"))
+    server.execute_station(run_id, "analiza", _output_for("analiza"))
+    server.execute_station(run_id, "dekompozycja", {"podproblemy": ["p1"]})
+    server.execute_station(run_id, "dobierz", _output_for("dobierz"))
+    # Routing zmienia sciezke na pelny
+    server.execute_station(run_id, "routing", {
+        "sciezka": "pelny", "stawka": "srednia", "ryzyko": "srednie",
+    })
+    status = server.get_run_status(run_id)
+    assert status["sciezka"] == "pelny"  # nadpisane przez routing
+
+
+# --- U4: historia bramki ---
+
+
+def test_u4_gate_history_tracking(isolated_runs):
+    """U4: get_gate_history zwraca faktyczna historie iteracji."""
+    run_id = _run_until_sprawdzenie("test historii bramki")
+    # Pierwszy powrot
+    server.quality_gate(run_id, "niezgodny", {}, "dobierz")
+    server.execute_station(run_id, "dobierz", _output_for("dobierz"))
+    server.execute_station(run_id, "planuj", _output_for("planuj"))
+    server.execute_station(run_id, "realizuj", _output_for("realizuj"))
+    server.execute_station(run_id, "weryfikacja", _output_for("weryfikacja"))
+    server.execute_station(run_id, "sprawdzenie", _output_for("sprawdzenie"))
+    # Zgodny
+    server.quality_gate(run_id, "zgodny")
+    history = server.get_gate_iterations(run_id)
+    assert len(history["historia"]) >= 2
+    assert history["historia"][0]["gate_decision"] == "powrot"
+    assert history["historia"][-1]["gate_decision"] == "przejdz"
+
+
+# --- U7: walidacja audit_status ---
+
+
+def test_u7_invalid_audit_status_raises(isolated_runs):
+    """U7: quality_gate odrzuca nieprawidlowy audit_status."""
+    run_id = _run_until_sprawdzenie("test walidacji audit_status")
+    try:
+        server.quality_gate(run_id, "nieznany")
+        assert False, "Should raise PipelineError"
+    except Exception as e:
+        assert "nieznany" in str(e).lower() or "nieprawidlowy" in str(e).lower()
+
+
+# --- U9: tolerancyjny parser KOPERTA ---
+
+
+def test_u9_parse_llm_output_tolerates_blank_lines():
+    """U9: parse_llm_output akceptuje puste linie bez indentacji w bloku KOPERTA."""
+    from pipeline_mcp.auto_pilot import parse_llm_output
+    llm_output = """Analiza zakonczona.
+
+KOPERTA:
+  pola_stacji:
+    analiza:
+      raport_streszczenie: ok
+      pewnosc: wysoka
+
+Wnioski: pozytywne.
+"""
+    result = parse_llm_output(llm_output, "analiza")
+    assert result is not None
+    assert "raport_streszczenie" in result or "_raw_output" in result

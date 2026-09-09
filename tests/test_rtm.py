@@ -195,7 +195,9 @@ def test_auto_update_after_sprawdzenie_niezgodny_downgrades(isolated_runs):
     req1.status = "weryfikowane"
     auto_update_rtm(env, "sprawdzenie", _sprawdzenie_output_niezgodny())
     assert req1.status == "niespelnione"
-    assert req1.stacja_weryfikujaca == "sprawdzenie"
+    # U6: stacja_weryfikujaca zachowana, stacja_niespelnienia ustawiona
+    assert req1.stacja_weryfikujaca == "weryfikacja"
+    assert req1.stacja_niespelnienia == "sprawdzenie"
 
 
 def test_auto_update_after_sprawdzenie_zgodny_no_change(isolated_runs):
@@ -403,7 +405,9 @@ def test_execute_station_auto_updates_rtm_sprawdzenie(isolated_runs):
     req1 = [e for e in rtm["rtm"] if e["req_id"] == "REQ-001"][0]
     # REQ-001 bylo weryfikowane -> sprawdzenie z Zgodnosc=niezgodny -> niespelnione
     assert req1["status"] == "niespelnione"
-    assert req1["stacja_weryfikujaca"] == "sprawdzenie"
+    # U6: stacja_weryfikujaca zachowana, stacja_niespelnienia ustawiona
+    assert req1["stacja_weryfikujaca"] == "weryfikacja"
+    assert req1["stacja_niespelnienia"] == "sprawdzenie"
 
 
 def test_envelope_summary_includes_rtm_count(isolated_runs):
@@ -497,3 +501,59 @@ def test_add_entry_requires_req_id(isolated_runs):
         assert False, "Should raise"
     except ValueError:
         pass
+
+
+# --- 11. U1: RTM false-positive przy pustym opisie ---
+
+
+def test_u1_empty_opis_not_false_positive_realizuj(isolated_runs):
+    """U1: wymaganie z pustym opisem nie moze byc false-positive dopasowane
+    w _update_after_realizuj (pusty string 'in' dowolny tekst = True)."""
+    env = create_envelope("test", "zamiar", "pelny")
+    # Dodaj wymaganie z pustym opisem
+    auto_update_rtm(env, "zmienne", {
+        "variables": [{"id": "REQ-EMPTY", "type": "requirement", "value": ""}],
+    })
+    req = [e for e in env.rtm if e.req_id == "REQ-EMPTY"][0]
+    assert req.opis == ""
+    assert req.status == "adresowane"
+    # Wykonaj realizuj - wymaganie z pustym opisem nie powinno byc zrealizowane
+    auto_update_rtm(env, "realizuj", {"kroki_wykonane": ["naprawiono bug w auth"]})
+    assert req.status == "adresowane"  # nie zrealizowane - pusty opis nie dopasowany
+
+
+def test_u1_empty_opis_not_false_positive_weryfikacja(isolated_runs):
+    """U1: wymaganie z pustym opisem nie moze byc false-positive dopasowane
+    w _update_after_weryfikacja."""
+    env = create_envelope("test", "zamiar", "pelny")
+    auto_update_rtm(env, "zmienne", {
+        "variables": [{"id": "REQ-EMPTY2", "type": "requirement", "value": ""}],
+    })
+    req = [e for e in env.rtm if e.req_id == "REQ-EMPTY2"][0]
+    assert req.opis == ""
+    # Wykonaj weryfikacje - pusty opis nie powinien dopasowac
+    auto_update_rtm(env, "weryfikacja", {
+        "werdykty": [{"status": "potwierdzony", "twierdzenie": "wszystko dziala"}],
+    })
+    assert req.stacja_weryfikujaca == ""  # nie dopasowane
+
+
+# --- 12. U6: stacja_niespelnienia nie nadpisuje stacja_weryfikujaca ---
+
+
+def test_u6_stacja_niespelnienia_preserves_weryfikujaca(isolated_runs):
+    """U6: _update_after_sprawdzenie ustawia stacja_niespelnienia,
+    nie nadpisuje stacja_weryfikujaca."""
+    env = create_envelope("test", "zamiar", "pelny")
+    auto_update_rtm(env, "zmienne", _zmienne_output_with_requirements())
+    auto_update_rtm(env, "realizuj", _realizuj_output())
+    auto_update_rtm(env, "weryfikacja", _weryfikacja_output())
+    req1 = [e for e in env.rtm if e.req_id == "REQ-001"][0]
+    assert req1.stacja_weryfikujaca == "weryfikacja"
+    assert req1.status == "weryfikowane"
+    # Reset na weryfikowane (bylo potwierdzone -> weryfikowane)
+    req1.status = "weryfikowane"
+    auto_update_rtm(env, "sprawdzenie", _sprawdzenie_output_niezgodny())
+    assert req1.status == "niespelnione"
+    assert req1.stacja_weryfikujaca == "weryfikacja"  # zachowane
+    assert req1.stacja_niespelnienia == "sprawdzenie"  # nowe pole

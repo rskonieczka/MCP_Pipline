@@ -1,0 +1,46 @@
+run_id: 2026-09-09-zaplanuj-poprawki-usterek
+sciezka: doglebny
+stacja_aktualna: inicjuj
+stacja_poprzednia: ''
+stan:
+  zamiar: Zaplanuj poprawki usterek z audytu przeplywu MCP wraz z macierza wymagan
+    RTM, nastepnie wdroz poprawki wraz ze sprawdzaniem czy wymagania zostaly wykonane
+  klasyfikacja: zlozone
+  punkt_wejscia: zmienne
+pola_stacji:
+  _wejscie:
+    kontekst: 'Audyt przeplywu Pipeline MCP Server wykryl 10 usterek (U1 krytyczna,
+      U2-U3 wysokie, U4-U6 srednie, U7-U10 niskie). Kod w /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/src/pipeline_mcp/.
+      Testy: 55 PASS. verify_integrity OK.'
+    zrodla: []
+    tryb_inicjacji: pelny
+  inicjuj:
+    klasyfikacja: zlozone
+    punkt_wejscia: zmienne
+    uzasadnienie: Zadanie wymaga dekompozycji 10 usterek na wymagania, planowania
+      kolejnosci napraw, realizacji wieloplikowej i weryfikacji pokrycia - 3+ podproblemy,
+      wysoka stawka (modyfikacja produkcji), wymaga zrodel i weryfikacji
+    ryzyka:
+    - U1 moze wymagac aktualizacji testow RTM
+    - U2 kompresja moze zepsuc istniejace testy
+    - U3 nadpisanie sciezki po routing moze zepsuc testy doglebny
+    - zmiany w models.py moga wymusic migracje YAML
+walidacja:
+  stacja_docelowa: zmienne
+  pola_wymagane:
+  - task_goal
+  pola_obecne:
+  - task_goal
+  pola_brakujace: []
+  status: gotowy
+  akcja_naprawcza: ''
+relacje:
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:inicjuj
+  typ: zawiera
+  pola: []
+timestamp: '2026-09-09T11:18:47.117895'
+_checkpoint:
+  station: inicjuj
+  suffix: ''
+  timestamp: '2026-09-09T11:18:47.118119'

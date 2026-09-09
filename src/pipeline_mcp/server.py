@@ -16,6 +16,7 @@ from .config import get_config
 from .envelope import (
     accumulate_state,
     add_station_relations,
+    compress_envelope,
     create_envelope,
     get_envelope_summary,
     update_station_fields,
@@ -190,8 +191,9 @@ def start_run(
         "zrodla": zrodla or [],
         "tryb_inicjacji": tryb_inicjacji,
     }
+    # U8: wejscie w osobnym polu, nie w pola_stacji (bo _wejscie nie jest stacja)
     if any([kontekst, zrodla]):
-        envelope.pola_stacji["_wejscie"] = wejscie
+        envelope.wejscie = wejscie
         save_checkpoint(run_id, "_start", envelope, "", ws)
 
     # Zapisz wezel Run do Memgraph (A1: strukturalny wezel grafu)
@@ -446,6 +448,14 @@ def execute_station(
         envelope.sciezka = sciezka  # type: ignore
         manifest.sciezka = sciezka  # type: ignore
 
+    # U3: jesli routing - nadpisz sciezke na podstawie wyjscia stacji routing
+    # (stacja routing w sciezce doglebny rewizuje wybor sciezki)
+    if station == "routing" and output.get("sciezka"):
+        nowa_sciezka = output["sciezka"]
+        if nowa_sciezka in ("szybki", "pelny", "doglebny"):
+            envelope.sciezka = nowa_sciezka  # type: ignore
+            manifest.sciezka = nowa_sciezka  # type: ignore
+
     # Waliduj wejscie nastepnej stacji
     next_station = routing_get_next_station(station, envelope.sciezka)
     validation = validate_input(next_station, envelope) if next_station else None
@@ -462,6 +472,11 @@ def execute_station(
     # checkpointu z poprzedniej iteracji)
     suffix = f"_iter{manifest.iteracja_bramki}" if manifest.iteracja_bramki > 0 else ""
     checkpoint_path = save_checkpoint(run_id, station, envelope, suffix, ws)
+
+    # U2: kompresja koperty w sciezce doglebny po stacjach wyzwalajacych -
+    # pelne dane pozostaja w checkpointach, koperta w kontekscie jest lzejsza
+    if envelope.sciezka == "doglebny" and station in ("analiza", "dobierz", "sprawdzenie"):
+        envelope = compress_envelope(envelope)
 
     # Aktualizuj manifest
     manifest = update_station_status(manifest, station, "zakonczona", checkpoint_path)
@@ -1110,7 +1125,8 @@ def auto_pilot_start(
     executed: list[str] = []
     bledy: list[str] = []
     final_status = "zakonczony"
-    gate_returns = 0
+    # U5: usunieto podwojny licznik gate_returns - polegamy wylacznie
+    # na quality_gate (gate_decision == "eskalacja") zarzadzajacej limitem
     station: str | None = from_station or None
 
     for _ in range(_AUTO_PILOT_MAX_STEPS):
@@ -1171,13 +1187,9 @@ def auto_pilot_start(
                 )
                 break
             if gate["gate_decision"] == "powrot":
-                gate_returns += 1
-                if gate_returns > max_gate_iterations:
-                    final_status = "zablokowany"
-                    bledy.append(
-                        f"Auto-pilot: przekroczono limit {max_gate_iterations} powrotow bramki"
-                    )
-                    break
+                # U5: polegamy wylacznie na quality_gate eskalacji -
+                # quality_gate zarzadza iteracja_bramki w manifeście
+                pass
             station = gate["next_station"]
         else:
             station = exec_result["next_station"]

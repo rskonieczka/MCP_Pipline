@@ -4,10 +4,13 @@ from __future__ import annotations
 from typing import Any
 
 from .manifest import increment_gate_iteration
-from .models import Manifest, QualityGateResult
+from .models import GateHistoryEntry, Manifest, PipelineError, QualityGateResult
 from .routing import get_post_gate_station, get_station_sequence, is_station_in_path
 
 MAX_GATE_ITERATIONS = 2
+
+# U7: dozwolone wartosci audit_status
+_VALID_AUDIT_STATUSES = ("zgodny", "niezgodny")
 
 
 def reset_stations_for_loop(manifest: Manifest, loop_target: str) -> Manifest:
@@ -37,6 +40,13 @@ def evaluate_gate(
     audit_wymiary = audit_wymiary or {}
     iteration = manifest.iteracja_bramki
 
+    # U7: walidacja audit_status - odrzuc nieprawidlowe wartosci
+    if audit_status not in _VALID_AUDIT_STATUSES:
+        raise PipelineError(
+            f"Nieprawidlowy audit_status '{audit_status}'. "
+            f"Dostepne: {list(_VALID_AUDIT_STATUSES)}"
+        )
+
     if audit_status == "zgodny":
         next_station = get_post_gate_station(manifest.sciezka)
         komunikat = (
@@ -44,6 +54,12 @@ def evaluate_gate(
             if next_station
             else "Bramka zgodna. Sciezka zakonczona - wywolaj close_run."
         )
+        # U4: zapisz historie iteracji
+        manifest.historia_bramki.append(GateHistoryEntry(
+            iteracja=iteration,
+            audit_status=audit_status,
+            gate_decision="przejdz",
+        ))
         return QualityGateResult(
             run_id=run_id,
             gate_decision="przejdz",
@@ -55,6 +71,12 @@ def evaluate_gate(
     # niezgodny
     if iteration >= MAX_GATE_ITERATIONS:
         manifest.status_runu = "zablokowany"  # type: ignore
+        # U4: zapisz historie eskalacji
+        manifest.historia_bramki.append(GateHistoryEntry(
+            iteracja=iteration,
+            audit_status=audit_status,
+            gate_decision="eskalacja",
+        ))
         return QualityGateResult(
             run_id=run_id,
             gate_decision="eskalacja",
@@ -73,6 +95,13 @@ def evaluate_gate(
     new_iteration = iteration + 1
     manifest = increment_gate_iteration(manifest)
     manifest = reset_stations_for_loop(manifest, target)
+    # U4: zapisz historie powrotu
+    manifest.historia_bramki.append(GateHistoryEntry(
+        iteracja=new_iteration,
+        audit_status=audit_status,
+        loop_target=target,
+        gate_decision="powrot",
+    ))
 
     return QualityGateResult(
         run_id=run_id,
@@ -103,10 +132,11 @@ def infer_loop_target(wymiary: dict[str, Any], sciezka: str = "pelny") -> str:
 
 def get_gate_history(run_id: str, manifest: Manifest) -> dict[str, Any]:
     """Zwraca historie iteracji bramki."""
+    # U4: zwracaj faktyczna historie z manifestu zamiast pustej listy
     return {
         "run_id": run_id,
         "iteracja_aktualna": manifest.iteracja_bramki,
         "max_iteracje": MAX_GATE_ITERATIONS,
         "pozostale_iteracje": max(0, MAX_GATE_ITERATIONS - manifest.iteracja_bramki),
-        "historia": [],  # TODO: sledzenie historii w przyszlosci
+        "historia": [e.model_dump() for e in manifest.historia_bramki],
     }

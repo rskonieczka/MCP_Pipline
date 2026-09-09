@@ -1,0 +1,113 @@
+run_id: 2026-09-09-zaplanuj-poprawki-usterek
+sciezka: doglebny
+stacja_aktualna: zmienne
+stacja_poprzednia: inicjuj
+stan:
+  zamiar: Zaplanuj poprawki usterek z audytu przeplywu MCP wraz z macierza wymagan
+    RTM, nastepnie wdroz poprawki wraz ze sprawdzaniem czy wymagania zostaly wykonane
+  klasyfikacja: zlozone
+  punkt_wejscia: zmienne
+pola_stacji:
+  _wejscie:
+    kontekst: 'Audyt przeplywu Pipeline MCP Server wykryl 10 usterek (U1 krytyczna,
+      U2-U3 wysokie, U4-U6 srednie, U7-U10 niskie). Kod w /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/src/pipeline_mcp/.
+      Testy: 55 PASS. verify_integrity OK.'
+    zrodla: []
+    tryb_inicjacji: pelny
+  inicjuj:
+    klasyfikacja: zlozone
+    punkt_wejscia: zmienne
+    uzasadnienie: Zadanie wymaga dekompozycji 10 usterek na wymagania, planowania
+      kolejnosci napraw, realizacji wieloplikowej i weryfikacji pokrycia - 3+ podproblemy,
+      wysoka stawka (modyfikacja produkcji), wymaga zrodel i weryfikacji
+    ryzyka:
+    - U1 moze wymagac aktualizacji testow RTM
+    - U2 kompresja moze zepsuc istniejace testy
+    - U3 nadpisanie sciezki po routing moze zepsuc testy doglebny
+    - zmiany w models.py moga wymusic migracje YAML
+  zmienne:
+    variables:
+    - id: REQ-001
+      type: requirement
+      value: 'U1: RTM nie moze oznaczac wymagan z pustym opisem jako zrealizowane/weryfikowane
+        - false-positive dopasowanie przez ''in'' operator'
+    - id: REQ-002
+      type: requirement
+      value: 'U2: compress_envelope musi byc wywolywany w sciezce doglebny po stacjach
+        analiza, dobierz, sprawdzenie - nie moze byc martwym kodem'
+    - id: REQ-003
+      type: requirement
+      value: 'U3: stacja routing w sciezce doglebny musi nadpisywac sciezke pipeline''u
+        na podstawie swojego wyjscia - nie moze byc dekoracyjna'
+    - id: REQ-004
+      type: requirement
+      value: 'U4: get_gate_history musi sledzic faktyczna historie iteracji bramki
+        (iteracja, timestamp, audit_status, loop_target)'
+    - id: REQ-005
+      type: requirement
+      value: 'U5: auto-pilot musi polegac wylacznie na quality_gate dla limitu bramki
+        - usunac podwojny licznik gate_returns'
+    - id: REQ-006
+      type: requirement
+      value: 'U6: _update_after_sprawdzenie nie moze nadpisywac stacja_weryfikujaca
+        przy oznaczaniu niespelnienia'
+    - id: REQ-007
+      type: requirement
+      value: 'U7: quality_gate musi walidowac audit_status in (''zgodny'',''niezgodny'')
+        i rzucac blad przy nieprawidlowej wartosci'
+    - id: REQ-008
+      type: requirement
+      value: 'U8: wejscie uzytkownika z start_run nie moze byc w pola_stacji jako
+        _wejscie - przeniesc do osobnego pola'
+    - id: REQ-009
+      type: requirement
+      value: 'U9: parse_llm_output musi tolerowac puste linie bez indentacji w bloku
+        KOPERTA'
+    - id: REQ-010
+      type: requirement
+      value: Wszystkie istniejace 55 testow musi przejsc po poprawkach - brak regresji
+    - id: REQ-011
+      type: requirement
+      value: Nalezy dodac testy dla poprawek U1-U9 pokrywajace nowe zachowania
+    - id: REQ-012
+      type: requirement
+      value: verify_integrity musi nadal zwracac status ok po poprawkach
+    relations: []
+    sources_used:
+    - src/pipeline_mcp/rtm.py
+    - src/pipeline_mcp/envelope.py
+    - src/pipeline_mcp/server.py
+    - src/pipeline_mcp/quality_gate.py
+    - src/pipeline_mcp/auto_pilot.py
+    - tests/test_pipeline.py
+    - tests/test_rtm.py
+    missing_data_resolution: {}
+    analysis_object:
+      name: Pipeline MCP Server - poprawki usterek z audytu
+walidacja:
+  stacja_docelowa: analiza
+  pola_wymagane:
+  - NAZWA_OBIEKTU
+  pola_obecne:
+  - NAZWA_OBIEKTU
+  pola_brakujace: []
+  status: gotowy
+  akcja_naprawcza: ''
+relacje:
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:inicjuj
+  typ: zawiera
+  pola: []
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:zmienne
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-09-09-zaplanuj-poprawki-usterek:zmienne
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:inicjuj
+  typ: nastapila_po
+  pola: []
+timestamp: '2026-09-09T11:19:28.695572'
+_checkpoint:
+  station: zmienne
+  suffix: ''
+  timestamp: '2026-09-09T11:19:28.695799'

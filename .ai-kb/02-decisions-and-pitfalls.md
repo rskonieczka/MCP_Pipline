@@ -99,3 +99,39 @@ Relacja `NASTAPILA_PO` ma kierunek **(stacja aktualna) -> (stacja poprzednia)**,
 ### P10: Sciezka i timestamp_end w wezle Run
 
 `write_run_node` wywolywane po stacji `inicjuj` aktualizuje `sciezka` z manifestu (nie hardcoded 'pelny'). `close_run_node` przyjmuje `timestamp_end` z manifestu.
+
+### P11: RTM false-positive przy pustym opisie (U1, naprawione 2026-09-09)
+
+`_update_after_realizuj` i `_update_after_weryfikacja` w `rtm.py` dopasowywaly wymagania przez `entry.opis.lower() in tekst`. Pusty opis (`""`) powoduje, ze `"" in dowolny_tekst` zwraca `True` - wszystkie wymagania z pustym opisem byly false-positive oznaczane jako `zrealizowane`/`weryfikowane`. Naprawa: dodano warunek `and entry.opis` przed dopasowaniem.
+
+### P12: compress_envelope byl martwym kodem (U2, naprawione 2026-09-09)
+
+`compress_envelope` w `envelope.py` byl zdefiniowany ale nigdy niewywolywany. Dokumentacja deklarowala kompresje w sciezce doglebny po stacjach `analiza`, `dobierz`, `sprawdzenie`. Naprawa: dodano wywolanie w `execute_station` w `server.py` po zapisie checkpointu. Kompresja dotyczy koperty w kontekscie konwersacji (zwracanej w `envelope_summary`), pelne dane zostaja w checkpointach.
+
+### P13: routing ignorowany (U3, naprawione 2026-09-09)
+
+Stacja `routing` w sciezce doglebny byla dekoracyjna - jej wyjscie `sciezka` nie nadpisywalo sciezki wybranej przez `inicjuj`. `determine_path` w `execute_station` przekazywal tylko `klasyfikacja`, ignorujac `stawka` i `ryzyko`. Naprawa: po stacji `routing` w `execute_station` nadpisujemy `envelope.sciezka` i `manifest.sciezka` z `output["sciezka"]` jesli obecnosc i jest poprawna.
+
+### P14: Podwojny limit bramki w auto-pilocie (U5, naprawione 2026-09-09)
+
+`auto_pilot_start` w `server.py` mial wlasny licznik `gate_returns` sprawdzajacy `gate_returns > max_gate_iterations`, niezaleznie od `quality_gate`/`evaluate_gate` zarzadzajacego `iteracja_bramki` w manifeście. To tworzylo dwie mechaniki limitu, ktore mogly sie rozminac. Naprawa: usunieto `gate_returns`, polegamy wylacznie na `quality_gate` (gate_decision == "eskalacja").
+
+### P15: get_gate_history zwracal pusta historie (U4, naprawione 2026-09-09)
+
+`get_gate_history` w `quality_gate.py` zwracal `historia: []` z komentarzem `TODO: sledzenie historii w przyszlosci`. Naprawa: dodano `GateHistoryEntry` do `models.py`, `historia_bramki` do `Manifest`, zapis historii w `evaluate_gate` dla kazdej decyzji (przejdz/powrot/eskalacja).
+
+### P16: stacja_weryfikujaca nadpisywane przy niespelnieniu (U6, naprawione 2026-09-09)
+
+`_update_after_sprawdzenie` w `rtm.py` przy wymiarze `Zgodnosc=niezgodny` ustawial `entry.stacja_weryfikujaca = "sprawdzenie"`, nadpisujac wczesniejsza wartosc `"weryfikacja"`. Tracilismy informacje o pierwotnej weryfikacji. Naprawa: dodano pole `stacja_niespelnienia` do `RTMEntry`, nie nadpisujemy `stacja_weryfikujaca`.
+
+### P17: Brak walidacji audit_status (U7, naprawione 2026-09-09)
+
+`quality_gate` przyjmowal dowolny string jako `audit_status`. Tylko `"zgodny"` wyzwalal przejscie; wszystko inne (literowka, `None`, pusty string) bylo traktowane jako niezgodny. Naprawa: dodano walidacje `audit_status in ("zgodny", "niezgodny")` w `evaluate_gate`, rzucanie `PipelineError` przy nieprawidlowej wartosci.
+
+### P18: _wejscie w pola_stacji (U8, naprawione 2026-09-09)
+
+`start_run` zapisywal wejscie uzytkownika jako `pola_stacji["_wejscie"]`. To nie jest nazwa stacji - `compress_envelope` moglby je usunac jako najstarszy. Naprawa: dodano pole `wejscie` do `Envelope` w `models.py`, przeniesiono zapis z `pola_stacji["_wejscie"]` do `envelope.wejscie`.
+
+### P19: Parser KOPERTA wymagal indentacji kazdej linii (U9, naprawione 2026-09-09)
+
+`parse_llm_output` w `auto_pilot.py` uzywal regex `r"KOPERTA:\s*\n((?:[ \t].*\n)*)"` wymagajacego indentacji kazdej linii po `KOPERTA:`. Pusta linia bez indentacji przerywala parsowanie, powodujac fallback do `_raw_output` i blokowanie auto-pilota. Naprawa: zmieniono na tolerancyjny regex z `re.DOTALL` i automatyczna indentacja linii.

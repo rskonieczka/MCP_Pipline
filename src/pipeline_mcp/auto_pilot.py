@@ -88,16 +88,26 @@ def execute_station_with_llm(
 
 
 def parse_llm_output(output: str, station: str) -> dict[str, Any]:
-    """Parsuje wyjscie LLM, szukajac bloku KOPERTA i pol stacji."""
-    # Szukaj bloku KOPERTA: ... (YAML)
-    # Format: KOPERTA:\n  ...\n
+    """Parsuje wyjscie LLM, szukajac bloku KOPERTA i pol stacji.
+
+    U9: tolerancyjny parser - akceptuje puste linie bez indentacji w bloku KOPERTA.
+    """
+    # Szukaj bloku KOPERTA - od 'KOPERTA:' do konca lub nastepnego naglowka
+    # bez wymogu indentacji kazdej linii (tolerancja na puste linie)
     koperta_match = re.search(
-        r"KOPERTA:\s*\n((?:[ \t].*\n)*)",
+        r"KOPERTA:\s*\n(.*?)(?=\n\S|\Z)",
         output,
+        re.DOTALL,
     )
 
     if koperta_match:
-        koperta_yaml = "KOPERTA:\n" + koperta_match.group(1)
+        # Zbuduj poprawny YAML: KOPERTA: z indentowanym blokiem
+        raw_block = koperta_match.group(1)
+        # Indentuj kazda linie o 2 spacje (YAML wymaga indentacji)
+        indented = "\n".join(
+            "  " + line if line.strip() else line for line in raw_block.splitlines()
+        )
+        koperta_yaml = "KOPERTA:\n" + indented
         try:
             koperta_data = yaml.safe_load(koperta_yaml)
             if koperta_data and "KOPERTA" in koperta_data:

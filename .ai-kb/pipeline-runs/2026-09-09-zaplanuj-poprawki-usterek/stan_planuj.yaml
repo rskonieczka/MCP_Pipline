@@ -1,0 +1,382 @@
+run_id: 2026-09-09-zaplanuj-poprawki-usterek
+sciezka: doglebny
+stacja_aktualna: planuj
+stacja_poprzednia: routing
+stan:
+  zamiar: Zaplanuj poprawki usterek z audytu przeplywu MCP wraz z macierza wymagan
+    RTM, nastepnie wdroz poprawki wraz ze sprawdzaniem czy wymagania zostaly wykonane
+  klasyfikacja: zlozone
+  punkt_wejscia: zmienne
+pola_stacji:
+  _wejscie:
+    kontekst: 'Audyt przeplywu Pipeline MCP Server wykryl 10 usterek (U1 krytyczna,
+      U2-U3 wysokie, U4-U6 srednie, U7-U10 niskie). Kod w /home/swami/Projekty/EVILLAGE/AI_MCP/Pipline/src/pipeline_mcp/.
+      Testy: 55 PASS. verify_integrity OK.'
+    zrodla: []
+    tryb_inicjacji: pelny
+  inicjuj:
+    klasyfikacja: zlozone
+    punkt_wejscia: zmienne
+    uzasadnienie: Zadanie wymaga dekompozycji 10 usterek na wymagania, planowania
+      kolejnosci napraw, realizacji wieloplikowej i weryfikacji pokrycia - 3+ podproblemy,
+      wysoka stawka (modyfikacja produkcji), wymaga zrodel i weryfikacji
+    ryzyka:
+    - U1 moze wymagac aktualizacji testow RTM
+    - U2 kompresja moze zepsuc istniejace testy
+    - U3 nadpisanie sciezki po routing moze zepsuc testy doglebny
+    - zmiany w models.py moga wymusic migracje YAML
+  zmienne:
+    variables:
+    - id: REQ-001
+      type: requirement
+      value: 'U1: RTM nie moze oznaczac wymagan z pustym opisem jako zrealizowane/weryfikowane
+        - false-positive dopasowanie przez ''in'' operator'
+    - id: REQ-002
+      type: requirement
+      value: 'U2: compress_envelope musi byc wywolywany w sciezce doglebny po stacjach
+        analiza, dobierz, sprawdzenie - nie moze byc martwym kodem'
+    - id: REQ-003
+      type: requirement
+      value: 'U3: stacja routing w sciezce doglebny musi nadpisywac sciezke pipeline''u
+        na podstawie swojego wyjscia - nie moze byc dekoracyjna'
+    - id: REQ-004
+      type: requirement
+      value: 'U4: get_gate_history musi sledzic faktyczna historie iteracji bramki
+        (iteracja, timestamp, audit_status, loop_target)'
+    - id: REQ-005
+      type: requirement
+      value: 'U5: auto-pilot musi polegac wylacznie na quality_gate dla limitu bramki
+        - usunac podwojny licznik gate_returns'
+    - id: REQ-006
+      type: requirement
+      value: 'U6: _update_after_sprawdzenie nie moze nadpisywac stacja_weryfikujaca
+        przy oznaczaniu niespelnienia'
+    - id: REQ-007
+      type: requirement
+      value: 'U7: quality_gate musi walidowac audit_status in (''zgodny'',''niezgodny'')
+        i rzucac blad przy nieprawidlowej wartosci'
+    - id: REQ-008
+      type: requirement
+      value: 'U8: wejscie uzytkownika z start_run nie moze byc w pola_stacji jako
+        _wejscie - przeniesc do osobnego pola'
+    - id: REQ-009
+      type: requirement
+      value: 'U9: parse_llm_output musi tolerowac puste linie bez indentacji w bloku
+        KOPERTA'
+    - id: REQ-010
+      type: requirement
+      value: Wszystkie istniejace 55 testow musi przejsc po poprawkach - brak regresji
+    - id: REQ-011
+      type: requirement
+      value: Nalezy dodac testy dla poprawek U1-U9 pokrywajace nowe zachowania
+    - id: REQ-012
+      type: requirement
+      value: verify_integrity musi nadal zwracac status ok po poprawkach
+    relations: []
+    sources_used:
+    - src/pipeline_mcp/rtm.py
+    - src/pipeline_mcp/envelope.py
+    - src/pipeline_mcp/server.py
+    - src/pipeline_mcp/quality_gate.py
+    - src/pipeline_mcp/auto_pilot.py
+    - tests/test_pipeline.py
+    - tests/test_rtm.py
+    missing_data_resolution: {}
+    analysis_object:
+      name: Pipeline MCP Server - poprawki usterek z audytu
+  analiza:
+    raport_streszczenie: 'Analiza 10 usterek z audytu przeplywu Pipeline MCP. U1 (RTM
+      false-positive) jest krytyczna - pusty opis powoduje ''in'' operator zwracac
+      True dla dowolnego tekstu. U2 (compress_envelope martwy kod) i U3 (routing ignorowany)
+      sa wysokie - funkcje istnieja ale nie sa wywolywane. U4-U6 to srednie ulepszenia.
+      U7-U9 to niskie poprawki robustness. Zmiany dotykaja 6 plikow: rtm.py, envelope.py,
+      server.py, quality_gate.py, auto_pilot.py, models.py plus testy.'
+    pewnosc: wysoka
+    ograniczenia:
+    - Nie psuc 55 istniejacych testow
+    - Zachowac kompatybilnosc YAML checkpointow
+    - verify_integrity musi nadal przechodzic
+    - Minimalna ingerencja - nie refaktorowac niepotrzebnie
+    wnioski:
+    - 'Poprawki mozna podzielic na 3 grupy: (A) RTM fixes U1+U6, (B) Przeplyw fixes
+      U2+U3+U5, (C) Robustness fixes U4+U7+U8+U9. Grupy sa niezalezne i moga byc robione
+      rownolegle.'
+    - U1 jest najszybsza poprawka - dodanie warunku 'and entry.opis' w 2 miejscach
+    - U2 wymaga wywolania compress_envelope w execute_station po okreslonych stacjach
+    - U3 wymaga nadpisania sciezki po stacji routing w execute_station
+    - U8 wymaga dodania pola wejscie do modelu Envelope i migracji start_run
+  dekompozycja:
+    podproblemy:
+    - id: PP-A
+      opis: 'Grupa A: RTM fixes (U1+U6) - naprawa false-positive dopasowania i nadpisywania
+        stacja_weryfikujaca'
+      krytyczne: true
+    - id: PP-B
+      opis: 'Grupa B: Przeplyw fixes (U2+U3+U5) - aktywacja compress_envelope, nadpisanie
+        sciezki po routing, usuniecie podwojnego limitu bramki'
+      krytyczne: true
+    - id: PP-C
+      opis: 'Grupa C: Robustness fixes (U4+U7+U8+U9) - historia bramki, walidacja
+        audit_status, przeniesienie _wejscie, tolerancyjny parser LLM'
+      krytyczne: false
+    - id: PP-D
+      opis: Testy (REQ-010+REQ-011+REQ-012) - dodanie testow dla nowych zachowan,
+        uruchomienie pelnej suity, verify_integrity
+      krytyczne: true
+    zaleznosci:
+    - od: PP-D
+      do: PP-A
+      typ: wymaga
+    - od: PP-D
+      do: PP-B
+      typ: wymaga
+    - od: PP-D
+      do: PP-C
+      typ: wymaga
+    kolejnosc:
+    - PP-A
+    - PP-B
+    - PP-C
+    - PP-D
+    krytyczne:
+    - PP-A (U1 krytyczna)
+    - PP-B (U2+U3 wysokie)
+    - PP-D (weryfikacja)
+  dobierz:
+    status_doboru: wybrano
+    metoda_doboru: bezposrednia - modyfikacja kodu z testami
+    warianty:
+    - id: V1
+      opis: 'Sekwencyjnie: A -> B -> C -> D (najbezpieczniejsze, testy po kazdej grupie)'
+      kryteria:
+      - bezpieczenstwo
+      - weryfikowalnosc
+    - id: V2
+      opis: 'Rownolegle: A+B+C jednoczesnie, potem D (szybsze, wyzsze ryzyko konfliktow)'
+    kryteria:
+    - minimalna ingerencja
+    - brak regresji
+    - spojnosc z istniejacym kodem
+    - kompatybilnosc YAML
+    porownanie:
+      V1:
+        bezpieczenstwo: wysokie
+        szybkosc: srednia
+      V2:
+        bezpieczenstwo: srednie
+        szybkosc: wysoka
+    rekomendacja:
+      wariant: V1
+      uzasadnienie: 'Sekwencyjne wdrozenie z testami po kazdej grupie umozliwia wczesne
+        wykrycie regresji. Grupy A, B, C dotykaja roznych plikow (A: rtm.py, B: envelope.py+server.py+auto_pilot.py,
+        C: quality_gate.py+models.py+auto_pilot.py+server.py), wiec konflikty sa minimalne,
+        ale sekwencyjnosc daje pelna weryfikowalnosc.'
+    ryzyka_i_warunki_rewizji:
+    - Jesli testy RTM zawioda po PP-A - cofnac zmiane i przeanalizowac
+    - Jesli testy doglebny zawioda po PP-B - sprawdzic czy compress_envelope nie usuwa
+      potrzebnych pol
+    najblizszy_krok: Przejscie do stacji routing, potem planuj z krokiem implementacji
+  routing:
+    sciezka: doglebny
+    stawka: wysoka
+    ryzyko: wysokie
+    stacje_uruchomione:
+    - inicjuj
+    - zmienne
+    - analiza
+    - dekompozycja
+    - dobierz
+    - routing
+    - planuj
+    - realizuj
+    - weryfikacja
+    - sprawdzenie
+    - ewaluacja
+    - utrwal
+    - monitoruj
+    stacje_pominiete: []
+    stacje_poglebione:
+    - dekompozycja
+    - routing
+    - ewaluacja
+    - monitoruj
+  planuj:
+    cel: Wdrozenie 9 poprawek usterek z audytu przeplywu MCP z macierza RTM i weryfikacja
+      pokrycia
+    sytuacja: '10 usterek zidentyfikowanych, 3 grupy poprawek (A: RTM, B: przeplyw,
+      C: robustness), sekwencyjne wdrozenie z testami po kazdej grupie'
+    kroki:
+    - id: K1
+      opis: 'PP-A U1: rtm.py - dodac ''and entry.opis'' w _update_after_realizuj (linia
+        99) i _update_after_weryfikacja (linia 121)'
+      zasoby:
+      - rtm.py
+      ryzyka:
+      - test_rtm moze wymusic aktualizacje
+    - id: K2
+      opis: 'PP-A U6: rtm.py - w _update_after_sprawdzenie nie nadpisywac stacja_weryfikujaca,
+        dodac pole stacja_niespelnienia do RTMEntry'
+      zasoby:
+      - rtm.py
+      - models.py
+      ryzyka:
+      - zmiana modelu wymaga migracji
+    - id: K3
+      opis: 'PP-B U2: server.py - wywolywac compress_envelope w execute_station po
+        stacjach analiza, dobierz, sprawdzenie gdy sciezka doglebny'
+      zasoby:
+      - server.py
+      - envelope.py
+      ryzyka:
+      - testy doglebny moga sprawdzac pelna koperte
+    - id: K4
+      opis: 'PP-B U3: server.py - po stacji routing nadpisac sciezke z output.sciezka
+        jesli obecnosc'
+      zasoby:
+      - server.py
+      ryzyka:
+      - testy moga zakladac stala sciezke
+    - id: K5
+      opis: 'PP-B U5: server.py - usunac gate_returns z auto_pilot_start, polegac
+        wylacznie na quality_gate eskalacji'
+      zasoby:
+      - server.py
+      ryzyka:
+      - auto-pilot moze zapetlic sie bez limitu
+    - id: K6
+      opis: 'PP-C U4: quality_gate.py - zaimplementowac sledzenie historii bramki
+        w manifeście lub pliku gate_history.yaml'
+      zasoby:
+      - quality_gate.py
+      - models.py
+      - manifest.py
+      ryzyka:
+      - zmiana modelu Manifest
+    - id: K7
+      opis: 'PP-C U7: quality_gate.py - walidowac audit_status in (''zgodny'',''niezgodny'')
+        w evaluate_gate'
+      zasoby:
+      - quality_gate.py
+      ryzyka:
+      - testy moga przekazywac inne wartosci
+    - id: K8
+      opis: 'PP-C U8: models.py+server.py - dodac pole wejscie do Envelope, przeniesc
+        _wejscie z pola_stacji'
+      zasoby:
+      - models.py
+      - server.py
+      - envelope.py
+      ryzyka:
+      - kompatybilnosc YAML, testy sprawdzajace pola_stacji._wejscie
+    - id: K9
+      opis: 'PP-C U9: auto_pilot.py - tolerancyjny parser bloku KOPERTA (yaml.safe_load
+        na calym bloku)'
+      zasoby:
+      - auto_pilot.py
+      ryzyka:
+      - zmiana parsowania moze zepsuc testy auto_pilot
+    - id: K10
+      opis: 'PP-D: dodac testy dla U1-U9 w test_pipeline.py i test_rtm.py'
+      zasoby:
+      - tests/test_pipeline.py
+      - tests/test_rtm.py
+      ryzyka:
+      - brak
+    - id: K11
+      opis: 'PP-D: uruchomic pelna suite testow, verify_integrity, sprawdzic pokrycie
+        RTM'
+      zasoby: []
+      ryzyka:
+      - niektore testy moga nie przejsc
+    zasoby:
+    - rtm.py
+    - envelope.py
+    - server.py
+    - quality_gate.py
+    - auto_pilot.py
+    - models.py
+    - manifest.py
+    - tests/test_pipeline.py
+    - tests/test_rtm.py
+    ryzyka:
+    - Regresja 55 testow
+    - Kompatybilnosc YAML checkpointow
+    - verify_integrity failure
+    - Testy RTM moga sprawdzac stare zachowanie
+    kryteria_sukcesu:
+    - 55+ testow PASS (bez regresji)
+    - verify_integrity status ok
+    - validate_rtm_coverage status kompletne
+    - Wszystkie 9 poprawek zaimplementowanych
+    punkty_kontrolne:
+    - 'Po K1-K2: uruchom test_rtm'
+    - 'Po K3-K5: uruchom test_pipeline'
+    - 'Po K6-K9: uruchom wszystkie testy'
+    - 'Po K10-K11: pelna weryfikacja z RTM'
+walidacja:
+  stacja_docelowa: realizuj
+  pola_wymagane:
+  - PLAN_DO_ZREALIZOWANIA
+  pola_obecne:
+  - PLAN_DO_ZREALIZOWANIA
+  pola_brakujace: []
+  status: gotowy
+  akcja_naprawcza: ''
+relacje:
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:inicjuj
+  typ: zawiera
+  pola: []
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:zmienne
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-09-09-zaplanuj-poprawki-usterek:zmienne
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:inicjuj
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:analiza
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-09-09-zaplanuj-poprawki-usterek:analiza
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:zmienne
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:dekompozycja
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-09-09-zaplanuj-poprawki-usterek:dekompozycja
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:analiza
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:dobierz
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-09-09-zaplanuj-poprawki-usterek:dobierz
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:dekompozycja
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:routing
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-09-09-zaplanuj-poprawki-usterek:routing
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:dobierz
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-09-09-zaplanuj-poprawki-usterek
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:planuj
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-09-09-zaplanuj-poprawki-usterek:planuj
+  cel: stacja:2026-09-09-zaplanuj-poprawki-usterek:routing
+  typ: nastapila_po
+  pola: []
+timestamp: '2026-09-09T11:20:38.576542'
+_checkpoint:
+  station: planuj
+  suffix: ''
+  timestamp: '2026-09-09T11:20:38.576928'

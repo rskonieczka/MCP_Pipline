@@ -96,7 +96,11 @@ def _update_after_realizuj(envelope: Envelope, output: dict[str, Any]) -> None:
         if entry.status in ("nieadresowane", "adresowane"):
             if "realizuj" not in entry.stacje_adresujace:
                 entry.stacje_adresujace.append("realizuj")
-            if entry.req_id.lower() in kroki_text or entry.opis.lower() in kroki_text:
+            # U1: sprawdzaj dopasowanie opisu tylko gdy niepusty -
+            # pusty opis powoduje 'in' zwracac True dla dowolnego tekstu
+            if entry.req_id.lower() in kroki_text or (
+                entry.opis and entry.opis.lower() in kroki_text
+            ):
                 entry.status = "zrealizowane"
 
 
@@ -118,7 +122,11 @@ def _update_after_weryfikacja(envelope: Envelope, output: dict[str, Any]) -> Non
         tekst_lower = tekst.lower()
 
         for entry in envelope.rtm:
-            if entry.req_id.lower() in tekst_lower or entry.opis.lower() in tekst_lower:
+            # U1: sprawdzaj dopasowanie opisu tylko gdy niepusty -
+            # pusty opis powoduje 'in' zwracac True dla dowolnego tekstu
+            if entry.req_id.lower() in tekst_lower or (
+                entry.opis and entry.opis.lower() in tekst_lower
+            ):
                 entry.stacja_weryfikujaca = "weryfikacja"
                 if status_w == "potwierdzony":
                     if entry.status != "niespelnione":
@@ -144,7 +152,8 @@ def _update_after_sprawdzenie(envelope: Envelope, output: dict[str, Any]) -> Non
     for entry in envelope.rtm:
         if entry.status == "weryfikowane":
             entry.status = "niespelnione"
-            entry.stacja_weryfikujaca = "sprawdzenie"
+            # U6: nie nadpisuj stacja_weryfikujaca - zachowaj pierwotna weryfikacje
+            entry.stacja_niespelnienia = "sprawdzenie"
 
 
 def validate_coverage(envelope: Envelope) -> dict[str, Any]:
