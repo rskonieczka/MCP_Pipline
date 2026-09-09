@@ -714,8 +714,10 @@ def update_envelope(
     else:
         raise PipelineError(f"Nieznana sekcja koperty: '{section}'")
 
-    # Zapisz zaktualizowana koperte jako checkpoint
-    save_checkpoint(run_id, "_manual_update", envelope, "", ws)
+    # Nadpisz checkpoint ostatniej zakonczonej stacji, aby get_latest_checkpoint
+    # widzial aktualny stan (zamiast tworzyc nowy plik spoza manifestu)
+    last_station = get_last_completed_station(manifest) or "_start"
+    save_checkpoint(run_id, last_station, envelope, "", ws)
 
     return {
         "run_id": run_id,
