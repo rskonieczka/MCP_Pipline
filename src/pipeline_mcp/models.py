@@ -51,6 +51,24 @@ class Stan(BaseModel):
     punkt_wejscia: str = ""
 
 
+RTMStatus = Literal[
+    "nieadresowane", "adresowane", "zrealizowane", "weryfikowane", "niespelnione"
+]
+
+
+class RTMEntry(BaseModel):
+    """Wpis Requirements Traceability Matrix - sledzenie wymagania przez pipeline."""
+
+    req_id: str
+    opis: str = ""
+    zrodlo: str = "zamiar"
+    stacje_adresujace: list[str] = Field(default_factory=list)
+    stacja_weryfikujaca: str = ""
+    status: RTMStatus = "nieadresowane"  # type: ignore
+    artefakty: list[str] = Field(default_factory=list)
+    checkpoint_weryfikacji: str = ""
+
+
 class Envelope(BaseModel):
     """Koperta - jedyny formalny noznik danych miedzy stacjami."""
 
@@ -62,6 +80,7 @@ class Envelope(BaseModel):
     pola_stacji: dict[str, dict[str, Any]] = Field(default_factory=dict)
     walidacja: Walidacja = Field(default_factory=Walidacja)
     relacje: list[Relacja] = Field(default_factory=list)
+    rtm: list[RTMEntry] = Field(default_factory=list)
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 

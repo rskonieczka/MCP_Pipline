@@ -1,0 +1,39 @@
+KOPERTA:
+  run_id: "2026-09-09-rtm-traceability"
+  sciezka: doglebny
+  stacja_aktualna: inicjuj
+  stacja_poprzednia: null
+  stan:
+    zamiar: "Przeanalizuj doglebnie projekt a nastepnie zaproponuj zmiane dodajaca Requirements Traceability Matrix RTM"
+    klasyfikacja: "zlozone"
+    punkt_wejscia: "zmienne"
+  pola_stacji:
+    inicjuj:
+      klasyfikacja: "zlozone"
+      punkt_wejscia: "zmienne"
+      uzasadnienie: >
+        Zadanie wymaga glebokiej analizy architektury 16 modulow Python,
+        zrozumienia kontraktow I/O miedzy 13 stacjami, identyfikacji braku
+        formalnego sledzenia wymagan (RTM) oraz zaprojektowania integracji
+        RTM z zachowaniem minimalnej ingerencji w istniejacy kod.
+        Stawka decyzyjna wysoka - zmiana architektoniczna w dzialajacym
+        systemie orkiestracji agentow AI.
+      ryzyka:
+        - "RTM moze zaburzyc istniejacy przeplyw koperty miedzy stacjami"
+        - "Dodanie nowego pola do Envelope wymaga migracji istniejacych checkpointow"
+        - "Integracja z Memgraph wymaga nowych typow wezlow i relacji"
+        - "Nadmierna formalizacja RTM moze spowolnic pipeline dla zadan trywialnych"
+  walidacja:
+    stacja_docelowa: zmienne
+    pola_wymagane: [task_goal]
+    pola_obecne: [stan.zamiar]
+    pola_brakujace: []
+    status: gotowy
+    akcja_naprawcza: ""
+  relacje:
+    - zrodlo: "stacja:2026-09-09-rtm-traceability:inicjuj"
+      cel: "stacja:2026-09-09-rtm-traceability:zmienne"
+      typ: nastapila_po
+    - zrodlo: "run:2026-09-09-rtm-traceability"
+      cel: "stacja:2026-09-09-rtm-traceability:inicjuj"
+      typ: zawiera

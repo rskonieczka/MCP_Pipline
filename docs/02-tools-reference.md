@@ -1,6 +1,6 @@
 # Referencja narzedzi MCP
 
-Serwer wystawia 18 narzedzi MCP podzielonych na 6 grup. Wszystkie narzedzia przyjmuja i zwracaja struktury JSON zgodne z modelem Pydantic.
+Serwer wystawia 26 narzedzi MCP podzielonych na 7 grup. Wszystkie narzedzia przyjmuja i zwracaja struktury JSON zgodne z modelem Pydantic.
 
 ## 1. Run management
 
@@ -354,6 +354,82 @@ auto_pilot_stop(run_id: str) -> {
     status: "zatrzymany",
     stacja_zatrzymania: str,
     checkpoint_path: str
+}
+```
+
+## 6b. Requirements Traceability Matrix (RTM)
+
+### 6b.1. get_rtm
+
+Zwraca macierz Requirements Traceability Matrix dla run'u. RTM mapuje wymagania uzytkownika na stacje adresujace, weryfikujace i artefakty.
+
+```python
+get_rtm(run_id: str) -> {
+    run_id: str,
+    rtm: [
+        {req_id, opis, zrodlo, stacje_adresujace, stacja_weryfikujaca, status, artefakty, checkpoint_weryfikacji}
+    ],
+    coverage: {
+        total, nieadresowane, adresowane, zrealizowane, weryfikowane, niespelnione,
+        pokrycie_procent, nieadresowane_ids, niespelnione_ids, status
+    }
+}
+```
+
+### 6b.2. update_rtm
+
+Reczna aktualizacja wpisu RTM. Pozwala agentowi nadpisac status wymagania, dodac stacje adresujace lub artefakty.
+
+```python
+update_rtm(
+    run_id: str,
+    req_id: str,          # identyfikator wymagania
+    updates: dict         # pola do aktualizacji (status, stacje_adresujace, artefakty, ...)
+) -> {
+    run_id: str,
+    entry: dict,           # zaktualizowany wpis
+    coverage: dict        # raport pokrycia
+}
+```
+
+### 6b.3. add_rtm_entry
+
+Dodaje nowy wpis do RTM. Uzyj gdy wymaganie nie zostalo automatycznie wyekstrahowane przez stacje zmienne.
+
+```python
+add_rtm_entry(
+    run_id: str,
+    req_id: str,                      # identyfikator wymagania
+    opis: str,                        # opis wymagania
+    zrodlo: str = "zamiar",           # zrodlo ("zamiar", "kontekst", "zrodla", "agent_inference")
+    stacje_adresujace: list = [],     # stacje adresujace
+    status: str = "nieadresowane"     # status poczatkowy
+) -> {
+    run_id: str,
+    entry: dict,                      # dodany wpis
+    coverage: dict                   # raport pokrycia
+}
+```
+
+### 6b.4. validate_rtm_coverage
+
+Waliduje pokrycie wymagan w RTM. Zwraca raport z lista nieadresowanych i niespelnionych wymagan.
+
+```python
+validate_rtm_coverage(run_id: str) -> {
+    run_id: str,
+    coverage: {
+        total: int,
+        nieadresowane: int,
+        adresowane: int,
+        zrealizowane: int,
+        weryfikowane: int,
+        niespelnione: int,
+        pokrycie_procent: float,
+        nieadresowane_ids: list[str],
+        niespelnione_ids: list[str],
+        status: "brak_wymagan" | "w_trakcie" | "kompletne" | "niekompletne"
+    }
 }
 ```
 

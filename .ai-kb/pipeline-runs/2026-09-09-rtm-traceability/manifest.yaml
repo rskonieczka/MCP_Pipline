@@ -1,0 +1,10 @@
+MANIFEST:
+  run_id: "2026-09-09-rtm-traceability"
+  zamiar: "Przeanalizuj doglebnie projekt a nastepnie zaproponuj zmiane dodajaca Requirements Traceability Matrix RTM"
+  sciezka: doglebny
+  iteracja_bramki: 0
+  stacje:
+    - stacja: inicjuj
+      status: zakonczona
+      timestamp: "2026-09-09T00:00:00"
+      checkpoint: stan_inicjuj.yaml

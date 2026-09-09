@@ -47,6 +47,7 @@ from .checkpoint import (
     save_envelope_final,
 )
 from .contracts import get_mapping_for_station, validate_input
+from .rtm import auto_update_rtm as rtm_auto_update, update_entry as rtm_update_entry, add_entry as rtm_add_entry, validate_coverage as rtm_validate_coverage
 from .quality_gate import evaluate_gate, get_gate_history
 from .routing import (
     determine_path,
@@ -85,6 +86,8 @@ Pipeline MCP Server orkiestruje prace agenta AI przez 13 stacji w petli pipeline
 - Skille stacji sa wbudowane w serwer - uzyj `get_station_contract` aby pobrac prompt skilla.
 - Bramka jakosci max 2 iteracje - po eskalacji wymagana interwencja uzytkownika.
 - `workspace` jest opcjonalny - domyslnie uzywa cwd (katalog projektu).
+- RTM (Requirements Traceability Matrix) sledzi wymagania przez pipeline automatycznie.
+  Uzyj `get_rtm` aby pobrac macierz, `validate_rtm_coverage` do raportu pokrycia.
 
 ## Sciezki pipeline'u
 
@@ -433,6 +436,9 @@ def execute_station(
     envelope = accumulate_state(envelope, station, output)
     envelope = add_station_relations(envelope, station, run_id)
 
+    # Automatyczna aktualizacja RTM (Requirements Traceability Matrix)
+    rtm_auto_update(envelope, station, output)
+
     # Jesli inicjuj - ustal sciezke na podstawie klasyfikacji
     if station == "inicjuj":
         klasyfikacja = output.get("klasyfikacja", "rutynowe")
@@ -649,7 +655,7 @@ def update_envelope(
 
     Args:
         run_id: Identyfikator run'u
-        section: Sekcja koperty ("stan", "pola_stacji.<stacja>", "walidacja", "relacje")
+        section: Sekcja koperty ("stan", "pola_stacji.<stacja>", "walidacja", "relacje", "rtm")
         fields: Pola do aktualizacji
         merge: True = scal z istniejacymi, False = zastap
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
@@ -694,6 +700,17 @@ def update_envelope(
             envelope.relacje.extend([Relacja(**r) for r in fields.get("relacje", [])])
         else:
             envelope.relacje = [Relacja(**r) for r in fields.get("relacje", [])]
+    elif section == "rtm":
+        from .models import RTMEntry
+        if merge:
+            existing_ids = {e.req_id for e in envelope.rtm}
+            for entry_data in fields.get("rtm", []):
+                entry = RTMEntry(**entry_data)
+                if entry.req_id not in existing_ids:
+                    envelope.rtm.append(entry)
+                    existing_ids.add(entry.req_id)
+        else:
+            envelope.rtm = [RTMEntry(**e) for e in fields.get("rtm", [])]
     else:
         raise PipelineError(f"Nieznana sekcja koperty: '{section}'")
 
@@ -737,6 +754,182 @@ def validate_contract(
 
     result = validate_input(target_station, envelope)
     return result.model_dump()
+
+
+# =====================================================================
+# 3b. REQUIREMENTS TRACEABILITY MATRIX (RTM)
+# =====================================================================
+
+
+@mcp.tool
+def get_rtm(run_id: str, workspace: str = "") -> dict[str, Any]:
+    """Zwraca macierz Requirements Traceability Matrix dla run'u.
+
+    RTM mapuje wymagania uzytkownika na stacje adresujace, weryfikujace
+    i artefakty. Automatycznie aktualizowana w trakcie wykonywania pipeline'u.
+
+    Args:
+        run_id: Identyfikator run'u
+        workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+
+    Returns:
+        Lista wpisow RTM z metadanymi i raportem pokrycia
+    """
+    ws = workspace if workspace else None
+    latest = get_latest_checkpoint(run_id, ws)
+    if not latest:
+        config = get_config()
+        manifest = load_manifest(config.manifest_path(run_id, ws))
+        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka)
+    else:
+        _, envelope = latest
+
+    return {
+        "run_id": run_id,
+        "rtm": [entry.model_dump() for entry in envelope.rtm],
+        "coverage": rtm_validate_coverage(envelope),
+    }
+
+
+@mcp.tool
+def update_rtm(
+    run_id: str,
+    req_id: str,
+    updates: dict[str, Any],
+    workspace: str = "",
+) -> dict[str, Any]:
+    """Reçzna aktualizacja wpisu Requirements Traceability Matrix.
+
+    Pozwala agentowi nadpisac status wymagania, dodac stacje adresujace
+    lub artefakty bez wykonywania pelnej stacji.
+
+    Args:
+        run_id: Identyfikator run'u
+        req_id: Identyfikator wymagania (np. "REQ-001")
+        updates: Pola do aktualizacji (status, stacje_adresujace, artefakty, ...)
+        workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+
+    Returns:
+        Zaktualizowany wpis RTM i raport pokrycia
+    """
+    ws = workspace if workspace else None
+    config = get_config()
+    manifest = load_manifest(config.manifest_path(run_id, ws))
+    _ensure_run_open(manifest)
+
+    latest = get_latest_checkpoint(run_id, ws)
+    envelope = latest[1] if latest else create_envelope(
+        run_id, manifest.zamiar, manifest.sciezka
+    )
+
+    entry = rtm_update_entry(envelope, req_id, updates)
+    if entry is None:
+        raise PipelineError(
+            f"Wpis RTM o req_id='{req_id}' nie istnieje w run'u {run_id}"
+        )
+
+    # Nadpisz checkpoint ostatniej zakonczonej stacji, aby get_latest_checkpoint
+    # widzial aktualny stan RTM (zamiast tworzyc nowy plik spoza manifestu)
+    last_station = get_last_completed_station(manifest) or "_start"
+    save_checkpoint(run_id, last_station, envelope, "", ws)
+
+    return {
+        "run_id": run_id,
+        "entry": entry.model_dump(),
+        "coverage": rtm_validate_coverage(envelope),
+    }
+
+
+@mcp.tool
+def add_rtm_entry(
+    run_id: str,
+    req_id: str,
+    opis: str,
+    zrodlo: str = "zamiar",
+    stacje_adresujace: list[str] | None = None,
+    status: str = "nieadresowane",
+    workspace: str = "",
+) -> dict[str, Any]:
+    """Dodaje nowy wpis do Requirements Traceability Matrix.
+
+    Uzyj gdy wymaganie nie zostalo automatycznie wyekstrahowane przez stacje
+    zmienne, ale agent identyfikuje je w trakcie wykonywania pipeline'u.
+
+    Args:
+        run_id: Identyfikator run'u
+        req_id: Identyfikator wymagania (np. "REQ-001")
+        opis: Opis wymagania
+        zrodlo: Zrodlo wymagania ("zamiar", "kontekst", "zrodla", "agent_inference")
+        stacje_adresujace: Stacje adresujace to wymaganie
+        status: Status poczatkowy (domyslnie "nieadresowane")
+        workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+
+    Returns:
+        Dodany wpis RTM i raport pokrycia
+    """
+    ws = workspace if workspace else None
+    config = get_config()
+    manifest = load_manifest(config.manifest_path(run_id, ws))
+    _ensure_run_open(manifest)
+
+    latest = get_latest_checkpoint(run_id, ws)
+    envelope = latest[1] if latest else create_envelope(
+        run_id, manifest.zamiar, manifest.sciezka
+    )
+
+    entry_data: dict[str, Any] = {
+        "req_id": req_id,
+        "opis": opis,
+        "zrodlo": zrodlo,
+        "status": status,
+    }
+    if stacje_adresujace:
+        entry_data["stacje_adresujace"] = stacje_adresujace
+
+    try:
+        entry = rtm_add_entry(envelope, entry_data)
+    except ValueError as e:
+        raise PipelineError(str(e))
+
+    # Nadpisz checkpoint ostatniej zakonczonej stacji, aby get_latest_checkpoint
+    # widzial aktualny stan RTM (zamiast tworzyc nowy plik spoza manifestu)
+    last_station = get_last_completed_station(manifest) or "_start"
+    save_checkpoint(run_id, last_station, envelope, "", ws)
+
+    return {
+        "run_id": run_id,
+        "entry": entry.model_dump(),
+        "coverage": rtm_validate_coverage(envelope),
+    }
+
+
+@mcp.tool
+def validate_rtm_coverage(run_id: str, workspace: str = "") -> dict[str, Any]:
+    """Waliduje pokrycie wymagan w Requirements Traceability Matrix.
+
+    Zwraca raport: liczbe wymagan w poszczegolnych statusach, procent pokrycia,
+    listy nieadresowanych i niespelnionych wymagan.
+
+    Args:
+        run_id: Identyfikator run'u
+        workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+
+    Returns:
+        Raport pokrycia wymagan z lista problematycznych req_id
+    """
+    ws = workspace if workspace else None
+    latest = get_latest_checkpoint(run_id, ws)
+    if not latest:
+        config = get_config()
+        manifest = load_manifest(config.manifest_path(run_id, ws))
+        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka)
+    else:
+        _, envelope = latest
+
+    return {
+        "run_id": run_id,
+        "coverage": rtm_validate_coverage(envelope),
+    }
 
 
 # =====================================================================

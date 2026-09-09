@@ -1,0 +1,29 @@
+run_id: 2026-07-08-analiza-sowa-sens
+sciezka: pelny
+stacja_aktualna: ''
+stacja_poprzednia: null
+stan:
+  zamiar: Analiza słowa 'sens' - przeprowadzenie wielowymiarowej analizy pojęcia 'sens'
+    z wykorzystaniem pipeline i notebooklm-mcp, zapis wyników w folderze 'Sens - Badania'
+  klasyfikacja: ''
+  punkt_wejscia: ''
+pola_stacji:
+  _wejscie:
+    kontekst: 'Workspace Obsydian/Badania. Istnieje folder ''Sens - Badania'' z dotychczasowymi
+      notatkami: Sens.md (mapa pojęcia 2020-2025), Kontrola semantyczna.md, Pamięć
+      semantyczna.md. Użytkownik chce pogłębić analizę używając pipeline i NotebookLM.'
+    zrodla: []
+    tryb_inicjacji: pelny
+walidacja:
+  stacja_docelowa: ''
+  pola_wymagane: []
+  pola_obecne: []
+  pola_brakujace: []
+  status: gotowy
+  akcja_naprawcza: ''
+relacje: []
+timestamp: '2026-07-08T08:34:48.610575'
+_checkpoint:
+  station: _start
+  suffix: ''
+  timestamp: '2026-07-08T08:34:48.610717'

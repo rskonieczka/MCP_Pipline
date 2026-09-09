@@ -116,5 +116,6 @@ def get_envelope_summary(envelope: Envelope) -> dict[str, Any]:
         "stan": envelope.stan.model_dump(),
         "pola_stacji_keys": list(envelope.pola_stacji.keys()),
         "relacje_count": len(envelope.relacje),
+        "rtm_count": len(envelope.rtm),
         "walidacja_status": envelope.walidacja.status,
     }

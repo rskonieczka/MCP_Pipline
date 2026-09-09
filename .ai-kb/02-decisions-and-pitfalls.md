@@ -52,6 +52,12 @@
 
 **Alternatywy odrzucone**: Lifespan hook (brak zamiaru przy starcie serwera), auto-run w execute_station (zamiar niejawny, trudny do audytu), instrukcje bez promptu (agent nadal musi jawnie wywolywac start_run).
 
+### D9: Requirements Traceability Matrix (RTM) jako modul + narzedzia MCP
+
+**Dlaczego**: Pipeline orkiestrowal 13 stacji bez formalnego sledzenia wymagan uzytkownika. RTM mapuje wymagania (ekstrahowane z `variables` typu `requirement` po stacji `zmienne`) na stacje adresujace, weryfikujace i artefakty. Automatyczna aktualizacja statusow po `realizuj`/`weryfikacja`/`sprawdzenie` zapewnia traceability bez dodatkowego obciazenia agenta. 4 narzedzia MCP (`get_rtm`, `update_rtm`, `add_rtm_entry`, `validate_rtm_coverage`) pozwalaja na reczna interwencje. Integracja z Memgraph (wezly `:Wymaganie`, relacje `:ADRESUJE`, `:WERYFIKUJE`) zapewnia audytowalnosc grafowa.
+
+**Alternatywy odrzucone**: Nowa stacja `rtm` (lamie definicje 3 sciezek, wszystkie kontrakty, zbyt inwazyjne), tylko pole w Envelope bez narzedzi (pasywne, brak walidacji pokrycia, brak integracji z Memgraph).
+
 ## Pułapki
 
 ### P1: Aktualizacja skilli wymaga aktualizacji pakietu

@@ -1,0 +1,484 @@
+run_id: 2026-07-08-analiza-sowa-sens
+sciezka: doglebny
+stacja_aktualna: routing
+stacja_poprzednia: dobierz
+stan:
+  zamiar: Analiza słowa 'sens' - przeprowadzenie wielowymiarowej analizy pojęcia 'sens'
+    z wykorzystaniem pipeline i notebooklm-mcp, zapis wyników w folderze 'Sens - Badania'
+  klasyfikacja: zlozone
+  punkt_wejscia: zmienne
+pola_stacji:
+  _wejscie:
+    kontekst: 'Workspace Obsydian/Badania. Istnieje folder ''Sens - Badania'' z dotychczasowymi
+      notatkami: Sens.md (mapa pojęcia 2020-2025), Kontrola semantyczna.md, Pamięć
+      semantyczna.md. Użytkownik chce pogłębić analizę używając pipeline i NotebookLM.'
+    zrodla: []
+    tryb_inicjacji: pelny
+  inicjuj:
+    klasyfikacja: zlozone
+    punkt_wejscia: zmienne
+    ryzyka:
+    - NotebookLM moze nie miec odpowiednich notebookow zrodlowych
+    - Istniejace badania moga byc juz wyczerpujace - ryzyko duplikacji
+    - Niejasny zakres analizy - czy poglegbic istniejace czy stworzyc nowe ujecie
+    sciezka: pelny
+    uzasadnienie: Analiza pojecia 'sens' obejmuje 3+ podproblemow (semantyka, pragmatyka,
+      neurokognicja, AI, egzystencjalny), wymaga zrodel zewnetrznych (NotebookLM),
+      weryfikacji, dekompozycji i ewaluacji ex-post. Stawka decyzyjna srednia - jakosc
+      badan.
+  zmienne:
+    analysis_object:
+      confidence_score: 85
+      description: Wielowymiarowa analiza pojęcia 'sens' obejmująca pola językowe,
+        filozoficzne, psychologiczne, neurokognitywne, AI i kulturowe
+      domain: filozofia języka, psychologia, neurokognicja, AI
+      expected_result: Kompletna analiza pojęcia 'sens' zapisana w folderze Sens -
+        Badania z wykorzystaniem pipeline i NotebookLM
+      name: Sens
+      object_id: OBJ-001
+      object_type: research_topic
+      primary_goal: Pogłębienie i uzupełnienie istniejących badań nad słowem 'sens'
+        o perspektywy filozoficzne, etymologiczne, semiotyczne i kulturowe
+      source_type: user_provided
+    conflicts: []
+    hypotheses:
+    - Etymologia sensus (percepcja zmysłowa) łączy się z problemem uziemienia w AI
+      - hipoteza o ucieleśnionym poznaniu
+    - Fenomenologia dostarcza ontologicznego fundamentu dla psychologicznego modelu
+      3-składnikowego
+    - Semiotyka uzupełnia semantykę o relacje między znakami w systemie
+    missing_data:
+    - Etymologia słowa sens (łac. sensus)
+    - Filozofia Fregego - Sinn vs Bedeutung
+    - Fenomenologia - Husserl, Heidegger
+    - Semiotyka - Peirce, de Saussure
+    - Kontekst kulturowy - Wschód vs Zachód
+    - Sens a bezsens - absurd, nonsens
+    - Sens w sztuce i literaturze
+    missing_data_resolution:
+      allowed_sources:
+      - notebooklm-mcp
+      - context7
+      - official_documentation
+      - project_files
+      fallback_when_denied: mark_as_unavailable
+      user_allowed_self_research: true
+      user_was_asked: false
+    operation_mode: analysis
+    prompt_variables:
+      LUKI:
+      - etymologia
+      - frege
+      - fenomenologia
+      - semiotyka
+      - kultura
+      - bezsens
+      - sztuka
+      OBIEKT: sens
+      ZAKRES: etymologia, filozofia, psychologia, neurokognicja, AI, kultura, sztuka
+      ZRODLA_NOTEBOOKLM: 1f1ea3cd-0ae7-47cd-99ad-f3e23732ec0f
+    recommended_next_step: Przejście do stacji analiza - wielowymiarowa analiza pojęcia
+      'sens' z uwzględnieniem zidentyfikowanych luk i wykorzystaniem NotebookLM
+    relations:
+    - confidence_score: 85
+      explanation: Sens językowy jest podstawą dla neurokognitywnego przetwarzania
+        sensu
+      from_variable_id: V001
+      relation_type: foundation_for
+      to_variable_id: V003
+    - confidence_score: 80
+      explanation: Neurokognicja sensu jest wzorcem dla modeli AI
+      from_variable_id: V003
+      relation_type: analogy_for
+      to_variable_id: V004
+    - confidence_score: 80
+      explanation: Sens poznawczy ugruntowuje przekonania egzystencjalne
+      from_variable_id: V001
+      relation_type: grounds
+      to_variable_id: V002
+    - confidence_score: 75
+      explanation: Etymologia (sensus=percepcja) łączy się z problemem uziemienia
+        w AI
+      from_variable_id: V005
+      relation_type: informs
+      to_variable_id: V004
+    - confidence_score: 85
+      explanation: Frege jest fundamentem semantyki zachodniej
+      from_variable_id: V006
+      relation_type: foundational_for
+      to_variable_id: V001
+    - confidence_score: 85
+      explanation: Fenomenologia pogłębia ujęcie egzystencjalne
+      from_variable_id: V007
+      relation_type: deepens
+      to_variable_id: V002
+    - confidence_score: 90
+      explanation: Konwencjonalizacja łączy pragmatykę z semantyką
+      from_variable_id: V012
+      relation_type: bridges
+      to_variable_id: V001
+    - confidence_score: 90
+      explanation: Korelacje zdrowotne walidują znaczenie sensu egzystencjalnego
+      from_variable_id: V013
+      relation_type: validates
+      to_variable_id: V002
+    risks:
+    - Deep research w NotebookLM może nie znaleźć źródeł dla luk filozoficznych
+    - Materiały mogą wymagać ręcznego uzupełnienia z literatury filozoficznej
+    - Ryzyko nakładania się z istniejącym Sens.md - należy tworzyć nowe ujęcie, nie
+      duplikować
+    selected_profile: research
+    sources_used:
+    - source_name: Sens.md
+      source_reference: /home/swami/Dokumenty/Obsydian/Badania/Sens - Badania/Sens.md
+      source_type: project_file
+      used_for: Mapa pojęcia 2020-2025, klasyfikacja form sensu
+      verification_scope: Pełny odczyt i analiza
+    - source_name: Kontrola semantyczna.md
+      source_reference: /home/swami/Dokumenty/Obsydian/Badania/Sens - Badania/Kontrola
+        semantyczna.md
+      source_type: project_file
+      used_for: Neurokognitywny aspekt sensu
+      verification_scope: Pełny odczyt
+    - source_name: Pamięć semantyczna.md
+      source_reference: /home/swami/Dokumenty/Obsydian/Badania/Sens - Badania/Pamięć
+        semantyczna.md
+      source_type: project_file
+      used_for: Definicja pamięci semantycznej
+      verification_scope: Pełny odczyt
+    - source_name: NotebookLM - Sens - Analiza pojęcia
+      source_reference: 'notebook_id: 1f1ea3cd-0ae7-47cd-99ad-f3e23732ec0f'
+      source_type: notebooklm-mcp
+      used_for: Wielowymiarowa analiza pojęcia, identyfikacja luk
+      verification_scope: 2 zapytania, 3 źródła w notebooku
+    - source_name: NotebookLM deep research
+      source_reference: 'task_id: 28cd751a-df1b-4880-bcef-c911dbcb57e3'
+      source_type: notebooklm-mcp
+      used_for: Web research - w toku
+      verification_scope: Oczekuje na zakończenie
+    validation:
+      confidence_scores_are_assigned: true
+      conflicts_are_listed: true
+      facts_are_separated_from_hypotheses: true
+      goal_is_clear: true
+      missing_data_is_listed: true
+      missing_data_not_filled_without_permission: false
+      missing_data_research_permission_recorded: true
+      no_unverified_claims_presented_as_facts: true
+      object_is_clear: true
+      official_sources_were_preferred_when_available: true
+      operation_mode_is_selected: true
+      output_is_reusable_by_next_agent: true
+      relations_are_defined: true
+      risks_are_listed: true
+      source_types_are_assigned: true
+      sources_are_listed_in_output: true
+    variables:
+    - confidence_score: 90
+      conflicts: []
+      dependencies: []
+      id: V001
+      label: Sens językowy/poznawczy
+      name: sens_jezykowy
+      source_reference: Sens.md + NotebookLM query 1
+      source_type: verified_source
+      type: entity
+      validation_rule: Musi obejmować semantykę i pragmatykę
+      value: Semantyka, pragmatyka, odniesienie, reprezentacje w mózgu i modelach
+        AI
+    - confidence_score: 90
+      conflicts: []
+      dependencies: []
+      id: V002
+      label: Sens egzystencjalny/życiowy
+      name: sens_egzystencjalny
+      source_reference: Sens.md + NotebookLM query 1
+      source_type: verified_source
+      type: entity
+      validation_rule: Musi zawierać 3-składnikowy model
+      value: 'Trzy komponenty: coherence, purpose, mattering'
+    - confidence_score: 85
+      conflicts: []
+      dependencies:
+      - V001
+      id: V003
+      label: Sens neurokognitywny
+      name: sens_neurokognitywny
+      source_reference: Kontrola semantyczna.md + Pamięć semantyczna.md + NotebookLM
+      source_type: verified_source
+      type: entity
+      value: Reprezentacje semantyczne + kontrola semantyczna w mózgu (pamięć semantyczna,
+        IFG, pMTG)
+    - confidence_score: 85
+      conflicts: []
+      dependencies:
+      - V001
+      - V003
+      id: V004
+      label: Sens w AI/LLM
+      name: sens_ai
+      source_reference: Sens.md + NotebookLM query 1
+      source_type: verified_source
+      type: entity
+      value: Relacje inferencyjne, problem uziemienia (grounding), normy w populacjach
+        agentów
+    - confidence_score: 80
+      conflicts: []
+      dependencies: []
+      id: V005
+      label: 'Luka: Etymologia słowa sens'
+      name: luka_etymologia
+      source_reference: NotebookLM query 2 - identyfikacja luki
+      source_type: agent_inference
+      type: risk
+      validation_rule: Wymaga weryfikacji w źródłach etymologicznych
+      value: Brak danych o etymologii (łac. sensus - zmysł, percepcja, kierunek)
+    - confidence_score: 85
+      conflicts: []
+      dependencies:
+      - V001
+      id: V006
+      label: 'Luka: Filozofia Fregego (Sinn vs Bedeutung)'
+      name: luka_frege
+      source_reference: NotebookLM query 2
+      source_type: agent_inference
+      type: risk
+      value: Brak odniesienia do Frege - fundament zachodniej semantyki
+    - confidence_score: 85
+      conflicts: []
+      dependencies:
+      - V002
+      id: V007
+      label: 'Luka: Fenomenologia (Husserl, Heidegger)'
+      name: luka_fenomenologia
+      source_reference: NotebookLM query 2
+      source_type: agent_inference
+      type: risk
+      value: Brak ujęcia fenomenologicznego - Dasein, intencjonalność
+    - confidence_score: 80
+      conflicts: []
+      dependencies:
+      - V001
+      id: V008
+      label: 'Luka: Semiotyka (Peirce, de Saussure)'
+      name: luka_semiotyka
+      source_reference: NotebookLM query 2
+      source_type: agent_inference
+      type: risk
+      value: Brak nauki o znaku - relacje znaczący/znaczony, triada Peirce'a
+    - confidence_score: 75
+      conflicts: []
+      dependencies:
+      - V002
+      id: V009
+      label: 'Luka: Kontekst kulturowy'
+      name: luka_kultura
+      source_reference: NotebookLM query 2
+      source_type: agent_inference
+      type: risk
+      value: Brak analizy różnic kulturowych (Wschód vs Zachód, indywidualizm vs kolektywizm)
+    - confidence_score: 80
+      conflicts: []
+      dependencies:
+      - V002
+      id: V010
+      label: 'Luka: Sens a bezsens (absurd, nonsens)'
+      name: luka_bezsens
+      source_reference: NotebookLM query 2
+      source_type: agent_inference
+      type: risk
+      value: Brak analizy negatywnej - Camus, absurd, nonsens logiczny
+    - confidence_score: 75
+      conflicts: []
+      dependencies:
+      - V001
+      - V002
+      id: V011
+      label: 'Luka: Sens w sztuce i literaturze'
+      name: luka_sztuka
+      source_reference: NotebookLM query 2
+      source_type: agent_inference
+      type: risk
+      value: Brak ujęcia metafory, poezji, narracji literackiej
+    - confidence_score: 90
+      conflicts: []
+      dependencies:
+      - V001
+      id: V012
+      label: 'Pragmatyka: konwencjonalizacja implikatur'
+      name: pragmatyka_konwencjonalizacja
+      source_reference: Sens.md + NotebookLM
+      source_type: verified_source
+      type: fact
+      value: Sensy pragmatyczne z czasem twardnieją w konwencje językowe (Su 2025)
+    - confidence_score: 90
+      conflicts: []
+      dependencies:
+      - V002
+      id: V013
+      label: Sens jako czynnik ochronny
+      name: sens_ochronny
+      source_reference: Sens.md + NotebookLM
+      source_type: verified_source
+      type: fact
+      value: Wyższy sens koreluje z niższym dystresem, myślami samobójczymi (r=-0.51),
+        depresją
+    - confidence_score: 100
+      conflicts: []
+      dependencies: []
+      id: V014
+      label: NotebookLM notebook ID
+      name: notebooklm_id
+      source_reference: notebooklm-mcp
+      source_type: verified_source
+      type: entity
+      value: 1f1ea3cd-0ae7-47cd-99ad-f3e23732ec0f
+    - confidence_score: 100
+      conflicts: []
+      dependencies:
+      - V014
+      id: V015
+      label: Deep research task ID
+      name: research_task_id
+      source_reference: notebooklm-mcp
+      source_type: verified_source
+      type: entity
+      value: 28cd751a-df1b-4880-bcef-c911dbcb57e3 (w toku)
+  analiza:
+    ograniczenia:
+    - Wieloznaczność pojęcia - sens językowy vs egzystencjalny może prowadzić do błędów
+      kategorialnych
+    - Dominacja badań WEIRD w psychometrii sensu
+    - Problem uziemienia w AI nierozwiązany
+    - Brak integracji między ujęciem analitycznym i kontynentalnym
+    - Redukcjonizm psychometryczny - spłycanie wymiaru fenomenologicznego
+    pewnosc: wysoki
+    raport_streszczenie: 'Sens jest pojęciem abstrakcyjnym wielokategorialnym obejmującym
+      7 form: semantyczną, pragmatyczną, neurokognitywną, AI/komputacyjną, egzystencjalną
+      (3-składnikową: coherence-purpose-mattering), semiotyczną i narracyjną. Ewolucja
+      od łac. sensus (percepcja) do abstrakcji odzwierciedla problem uziemienia w
+      AI. Frege (Sinn/Bedeutung) fundamentuje semantykę. Fenomenologia (Husserl, Heidegger,
+      Ricoeur) głębi psychologię. Semiotyka (Peirce, de Saussure) wyjaśnia dynamikę
+      znaku. Sens jest czynnikiem ochronnym (r=-0.51 z myślami samobójczymi). Narracja
+      i metafora poszerzają repertuar sensów. Logoterapia Frankla dowodzi możliwości
+      kreacji sensu w każdych warunkach. Analiza zapisana w folderze Sens - Badania
+      jako ''Analiza pojęcia sens - synteza wielowymiarowa.md''.'
+    wnioski:
+    - Sens jest pojęciem wielowymiarowym wymagającym integracji 7 perspektyw
+    - Etymologia (sensus=percepcja) łączy się z problemem uziemienia w AI
+    - Frege jest fundamentem współczesnej semantyki - brak w dotychczasowych materiałach
+    - Fenomenologia dostarcza ontologicznego fundamentu dla psychometrii
+    - Semiotyka uzupełnia semantykę o dynamikę tworzenia znaczeń
+    - Sens jest mierzalnym czynnikiem ochronnym (metaanalizy 2023-2024)
+    - Narracja i metafora modelują sens (Ricoeur - nadwyżka znaczenia)
+    - Logoterapia Frankla - sens można kreować w każdych warunkach
+    - Pełne zrozumienie wymaga integracji wszystkich perspektyw
+    - 'Luki: kontekst kulturowy (Wschód vs Zachód), sens a bezsens (absurd), sztuka
+      i literatura - wymagają dalszych badań'
+  dekompozycja:
+    kolejnosc:
+    - P1
+    - P2
+    - P3
+    - P4
+    - P5
+    podproblemy:
+    - id: P1
+      nazwa: Analiza filozoficzna (Frege, fenomenologia, semiotyka)
+      priorytet: wysoki
+      status: zakonczony
+      typ: zalezny
+    - id: P2
+      nazwa: Analiza psychologiczna i neurokognitywna
+      priorytet: wysoki
+      status: zakonczony
+      typ: zalezny
+    - id: P3
+      nazwa: Analiza AI i problemu uziemienia
+      priorytet: sredni
+      status: zakonczony
+      typ: zalezny
+    - id: P4
+      nazwa: Analiza kulturowa i narracyjna
+      priorytet: sredni
+      status: zakonczony
+      typ: zalezny
+    - id: P5
+      nazwa: Synteza i zapis wynikow
+      priorytet: wysoki
+      status: zakonczony
+      typ: zalezny
+    warunki_brzegowe:
+    - Wszystkie podproblemy zakonczone - analiza zapisana w pliku
+  dobierz:
+    cel_doboru: Wybor sposobu zapisu i prezentacji wynikow analizy
+    warianty:
+    - id: W1
+      nazwa: Analiza zapisana jako dokument markdown w folderze Sens - Badania
+      ocena: najlepszy
+      uzasadnienie: Spelnia wymog zapisu w odpowiednim folderze, format markdown zgodny
+        z Obsydian
+    wybrany_wariant: W1
+  routing:
+    sciezka: pelny
+    uzasadnienie: 'Analiza zakonczona, wszystkie podproblemy rozwiazane, wynik zapisany.
+      Routing przez pozostale stacje: planuj -> realizuj -> weryfikacja -> sprawdzenie
+      -> ewaluacja -> utrwal'
+walidacja:
+  stacja_docelowa: planuj
+  pola_wymagane:
+  - CEL_DO_ZAPLANOWANIA
+  pola_obecne: []
+  pola_brakujace: []
+  status: wnioskowane
+  akcja_naprawcza: ''
+relacje:
+- zrodlo: run:2026-07-08-analiza-sowa-sens
+  cel: stacja:2026-07-08-analiza-sowa-sens:inicjuj
+  typ: zawiera
+  pola: []
+- zrodlo: run:2026-07-08-analiza-sowa-sens
+  cel: stacja:2026-07-08-analiza-sowa-sens:zmienne
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-07-08-analiza-sowa-sens:zmienne
+  cel: stacja:2026-07-08-analiza-sowa-sens:inicjuj
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-08-analiza-sowa-sens
+  cel: stacja:2026-07-08-analiza-sowa-sens:analiza
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-07-08-analiza-sowa-sens:analiza
+  cel: stacja:2026-07-08-analiza-sowa-sens:zmienne
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-08-analiza-sowa-sens
+  cel: stacja:2026-07-08-analiza-sowa-sens:dekompozycja
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-07-08-analiza-sowa-sens:dekompozycja
+  cel: stacja:2026-07-08-analiza-sowa-sens:analiza
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-08-analiza-sowa-sens
+  cel: stacja:2026-07-08-analiza-sowa-sens:dobierz
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-07-08-analiza-sowa-sens:dobierz
+  cel: stacja:2026-07-08-analiza-sowa-sens:dekompozycja
+  typ: nastapila_po
+  pola: []
+- zrodlo: run:2026-07-08-analiza-sowa-sens
+  cel: stacja:2026-07-08-analiza-sowa-sens:routing
+  typ: zawiera
+  pola: []
+- zrodlo: stacja:2026-07-08-analiza-sowa-sens:routing
+  cel: stacja:2026-07-08-analiza-sowa-sens:dobierz
+  typ: nastapila_po
+  pola: []
+timestamp: '2026-07-08T08:52:43.602370'
+_checkpoint:
+  station: routing
+  suffix: ''
+  timestamp: '2026-07-08T08:52:43.602644'

@@ -1,0 +1,47 @@
+run_id: 2026-07-08-analiza-sowa-sens
+sciezka: doglebny
+stacja_aktualna: inicjuj
+stacja_poprzednia: ''
+stan:
+  zamiar: Analiza słowa 'sens' - przeprowadzenie wielowymiarowej analizy pojęcia 'sens'
+    z wykorzystaniem pipeline i notebooklm-mcp, zapis wyników w folderze 'Sens - Badania'
+  klasyfikacja: zlozone
+  punkt_wejscia: zmienne
+pola_stacji:
+  _wejscie:
+    kontekst: 'Workspace Obsydian/Badania. Istnieje folder ''Sens - Badania'' z dotychczasowymi
+      notatkami: Sens.md (mapa pojęcia 2020-2025), Kontrola semantyczna.md, Pamięć
+      semantyczna.md. Użytkownik chce pogłębić analizę używając pipeline i NotebookLM.'
+    zrodla: []
+    tryb_inicjacji: pelny
+  inicjuj:
+    klasyfikacja: zlozone
+    punkt_wejscia: zmienne
+    ryzyka:
+    - NotebookLM moze nie miec odpowiednich notebookow zrodlowych
+    - Istniejace badania moga byc juz wyczerpujace - ryzyko duplikacji
+    - Niejasny zakres analizy - czy poglegbic istniejace czy stworzyc nowe ujecie
+    sciezka: pelny
+    uzasadnienie: Analiza pojecia 'sens' obejmuje 3+ podproblemow (semantyka, pragmatyka,
+      neurokognicja, AI, egzystencjalny), wymaga zrodel zewnetrznych (NotebookLM),
+      weryfikacji, dekompozycji i ewaluacji ex-post. Stawka decyzyjna srednia - jakosc
+      badan.
+walidacja:
+  stacja_docelowa: zmienne
+  pola_wymagane:
+  - task_goal
+  pola_obecne:
+  - task_goal
+  pola_brakujace: []
+  status: gotowy
+  akcja_naprawcza: ''
+relacje:
+- zrodlo: run:2026-07-08-analiza-sowa-sens
+  cel: stacja:2026-07-08-analiza-sowa-sens:inicjuj
+  typ: zawiera
+  pola: []
+timestamp: '2026-07-08T08:35:10.943659'
+_checkpoint:
+  station: inicjuj
+  suffix: ''
+  timestamp: '2026-07-08T08:35:10.944022'

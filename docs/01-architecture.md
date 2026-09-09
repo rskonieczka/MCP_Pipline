@@ -52,6 +52,7 @@ src/pipeline_mcp/
   auto_pilot.py          # Tryb auto-pilot: wywolywanie LLM per stacja
   llm.py                 # Abstrakcja dostawcy LLM (OpenAI, Anthropic, lokalny)
   skills_loader.py       # Ladowanie wbudowanych skilli z pakietu (src/pipeline_mcp/skills/)
+  rtm.py                 # Requirements Traceability Matrix - sledzenie wymagan
   skills/                # Wbudowane skille stacji (self-contained)
     inicjuj-run/SKILL.md
     zmienne/SKILL.md
