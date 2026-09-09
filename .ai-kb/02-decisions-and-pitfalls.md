@@ -94,7 +94,7 @@ Relacja `NASTAPILA_PO` ma kierunek **(stacja aktualna) -> (stacja poprzednia)**,
 
 ### P9: Etykiety wezlow encji w Memgraph
 
-`_label_for_id` w `memgraph.py` obsluguje 12 prefiksow id (run, stacja, zmienna, podproblem, decyzja, krok, zmiana, twierdzenie, werdykt, wymiar, wniosek, checkpoint). Bez tego wezly encji tworzone byly bez labela, uniemozliwiajac zapytania audytowe.
+`_label_for_id` w `memgraph.py` obsluguje 13 prefiksow id (run, stacja, zmienna, podproblem, decyzja, krok, zmiana, twierdzenie, werdykt, wymiar, wniosek, checkpoint, wymaganie). Bez tego wezly encji tworzone byly bez labela, uniemozliwiajac zapytania audytowe.
 
 ### P10: Sciezka i timestamp_end w wezle Run
 

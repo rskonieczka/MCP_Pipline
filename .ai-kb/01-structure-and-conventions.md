@@ -7,7 +7,7 @@ Pipline/
   README.md                    # Przeglad, instalacja, szybki start
   docs/                        # Dokumentacja architektoniczna
     01-architecture.md         # Architektura, komponenty, przeplyw danych
-    02-tools-reference.md      # Referencja 18 narzedzi MCP
+    02-tools-reference.md      # Referencja 26 narzedzi MCP
     03-envelope-spec.md        # Specyfikacja koperty (YAML envelope)
     04-paths-and-routing.md    # Sciezki pipeline'u i routing
     05-quality-gate.md         # Bramka jakosci i petla zwrotna

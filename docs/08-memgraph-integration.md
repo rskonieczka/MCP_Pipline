@@ -35,6 +35,7 @@ Memgraph jest opcjonalny. Jesli niedostepny, serwer kontynuuje bez zapisu grafu 
 | `Zmiana` | run_id:z001 | run_id, zmiana_id, plik, opis |
 | `WymiarAudytu` | run_id:wa001 | run_id, wymiar, ocena, status |
 | `Checkpoint` | run_id:cp_NN | run_id, stacja, sciezka, timestamp |
+| `Wymaganie` | run_id:REQ-001 | run_id, req_id, opis, status, zrodlo |
 
 ### 3.2. Krawedzie
 
@@ -54,6 +55,8 @@ Memgraph jest opcjonalny. Jesli niedostepny, serwer kontynuuje bez zapisu grafu 
 | `KONTYNUACJA` | Run | Run | - |
 | `NAPRAWIA` | Run | Run | - |
 | `PONOWNE_URUCHOMIENIE` | Run | Run | - |
+| `ADRESUJE` | Stacja | Wymaganie | - |
+| `WERYFIKUJE` | Stacja | Wymaganie | - |
 
 ## 4. Zapis do Memgraph
 
@@ -121,6 +124,47 @@ class MemgraphClient:
         for rel in relacje:
             self.write_relation(rel["zrodlo"], rel["cel"],
                                rel["typ"].upper(), rel.get("pola"))
+
+    def write_rtm_nodes(self, run_id: str, envelope):
+        """Zapisuje wezly Wymaganie i relacje ADRESUJE/WERYFIKUJE z RTM."""
+        for entry in envelope.rtm:
+            req_node_id = f"wymaganie:{run_id}:{entry.req_id}"
+            with self.driver.session() as session:
+                # Wezel Wymaganie
+                session.run(
+                    "MERGE (w:Wymaganie {id: $req_node_id}) "
+                    "SET w.req_id = $req_id, w.opis = $opis, "
+                    "w.status = $status, w.zrodlo = $zrodlo",
+                    req_node_id=req_node_id, req_id=entry.req_id,
+                    opis=entry.opis, status=entry.status,
+                    zrodlo=entry.zrodlo,
+                )
+                # Relacja: Run ZAWIERA Wymaganie
+                session.run(
+                    "MERGE (r:Run {id: $run_node_id}) "
+                    "MERGE (w:Wymaganie {id: $req_node_id}) "
+                    "MERGE (r)-[:ZAWIERA]->(w)",
+                    run_node_id=f"run:{run_id}",
+                    req_node_id=req_node_id,
+                )
+                # Relacje: Stacja ADRESUJE Wymaganie
+                for stacja in entry.stacje_adresujace:
+                    session.run(
+                        "MERGE (s:Stacja {id: $station_id}) "
+                        "MERGE (w:Wymaganie {id: $req_node_id}) "
+                        "MERGE (s)-[:ADRESUJE]->(w)",
+                        station_id=f"stacja:{run_id}:{stacja}",
+                        req_node_id=req_node_id,
+                    )
+                # Relacja: Stacja WERYFIKUJE Wymaganie
+                if entry.stacja_weryfikujaca:
+                    session.run(
+                        "MERGE (s:Stacja {id: $station_id}) "
+                        "MERGE (w:Wymaganie {id: $req_node_id}) "
+                        "MERGE (s)-[:WERYFIKUJE]->(w)",
+                        station_id=f"stacja:{run_id}:{entry.stacja_weryfikujaca}",
+                        req_node_id=req_node_id,
+                    )
 
     def validate_graph_continuity(self, run_id: str) -> list:
         """Walidacja ciaglosci grafu - czy stacja biezaca nastapila po stacji zakonczonej."""

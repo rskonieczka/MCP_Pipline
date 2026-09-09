@@ -111,6 +111,15 @@ KOPERTA:
     - zrodlo: "zmienna:V001"
       cel: "zmienna:V003"
       typ: zalezy_od
+  rtm:                       # Requirements Traceability Matrix - sledzenie wymagan
+    - req_id: "REQ-001"
+      opis: "Opis wymagania"
+      zrodlo: "zmiar"         # zrodlo: zamiar | zmienne | kontekst | zrodla | agent_inference
+      stacje_adresujace: ["zmienne"]  # stacje odpowiedzialne za to wymaganie
+      stacja_weryfikujaca: "weryfikacja"  # stacja weryfikujaca
+      status: "adresowane"    # nieadresowane | adresowane | zrealizowane | weryfikowane | niespelnione
+      artefakty: []           # linki do wyjsc stacji (pola_stacji.<stacja>.<pole>)
+      checkpoint_weryfikacji: ""  # ktory checkpoint potwierdza
 ```
 
 ## 2. Zasady koperty
@@ -179,6 +188,8 @@ Typy relacji:
 - `kontynuacja` - run jest kontynuacja innego run'u
 - `naprawia` - run naprawia inny run
 - `ponowne_uruchomienie` - run jest ponownym uruchomieniem
+- `ADRESUJE` - stacja adresuje wymaganie (Stacja -> Wymaganie, z RTM)
+- `WERYFIKUJE` - stacja weryfikuje wymaganie (Stacja -> Wymaganie, z RTM)
 
 ## 5. Implementacja w serwerze
 
@@ -194,7 +205,24 @@ class Envelope(BaseModel):
     pola_stacji: dict[str, dict]
     walidacja: Walidacja
     relacje: list[Relacja]
+    rtm: list[RTMEntry]            # Requirements Traceability Matrix
 ```
+
+Model `RTMEntry` w `models.py`:
+
+```python
+class RTMEntry(BaseModel):
+    req_id: str                    # identyfikator wymagania (np. "REQ-001")
+    opis: str = ""                 # opis wymagania
+    zrodlo: str = "zamiar"         # zrodlo pochodzenia
+    stacje_adresujace: list[str]   # stacje odpowiedzialne za adresowanie
+    stacja_weryfikujaca: str = ""  # stacja weryfikujaca
+    status: RTMStatus = "nieadresowane"  # status sledzenia
+    artefakty: list[str]           # linki do artefaktow (pola_stacji.<stacja>.<pole>)
+    checkpoint_weryfikacji: str = ""  # checkpoint potwierdzajacy
+```
+
+Statusy `RTMStatus`: `nieadresowane` -> `adresowane` -> `zrealizowane` -> `weryfikowane` / `niespelnione`.
 
 Operacje na kopercie w `envelope.py`:
 - `create_envelope(run_id, zamiar)` - inicjalna koperta

@@ -84,7 +84,8 @@ Glowny punkt wejscia. Rejestruje wszystkie narzedzia MCP przez dekoratory FastMC
 Modele Pydantic dla struktur danych:
 
 - `Run` - identyfikator run'u, zamiar, sciezka, status, iteracja bramki
-- `Envelope` (Koperta) - run_id, sciezka, stacja_aktualna, stacja_poprzednia, stan, pola_stacji, walidacja, relacje
+- `Envelope` (Koperta) - run_id, sciezka, stacja_aktualna, stacja_poprzednia, stan, pola_stacji, walidacja, relacje, rtm
+- `RTMEntry` - wpis Requirements Traceability Matrix (req_id, opis, zrodlo, stacje_adresujace, stacja_weryfikujaca, status, artefakty, checkpoint_weryfikacji)
 - `Manifest` - indeks stacji, statusy, timestampy, checkpointy
 - `StationOutput` - wyjscie stacji przekazywane przez agenta
 - `ContractValidation` - wynik walidacji kontraktu wejscia stacji docelowej
@@ -159,6 +160,7 @@ Integracja z Memgraph przez sterownik bolt:
 - `write_run_node(run_id, zamiar)` - wezel Run
 - `write_station_node(run_id, station, status)` - wezel Stacja
 - `write_relation(source, target, rel_type, fields)` - krawedzie
+- `write_rtm_nodes(run_id, envelope)` - wezly Wymaganie i relacje ADRESUJE/WERYFIKUJE
 - `validate_graph_continuity(run_id)` - walidacja ciaglosci grafu
 - `audit_run_graph(run_id)` - zapytania audytowe (osierocone wezly, brakujace krawedzie)
 
@@ -194,6 +196,20 @@ Ladowanie wbudowanych skilli z pakietu (`src/pipeline_mcp/skills/`). Skille sa k
 - `get_contracts_spec()` - odczyt wbudowanych kontraktow `kontrakty_pipelines.md`
 
 Skille sa ladowane przez `importlib.resources` (Python 3.9+), co umozliwia dostep do zasobow pakietu niezaleznie od miejsca instalacji.
+
+### 3.13. rtm.py
+
+Requirements Traceability Matrix - sledzenie wymagan uzytkownika przez caly pipeline. Ekstrahuje wymagania z `variables` typu `requirement` po stacji `zmienne`, automatycznie aktualizuje statusy po `realizuj`/`weryfikacja`/`sprawdzenie`, waliduje pokrycie wymagan.
+
+- `extract_requirements_from_zmienne(output)` - ekstrakcja wymagan z wyjscia stacji zmienne
+- `auto_update_rtm(envelope, station, output)` - automatyczna aktualizacja RTM po stacjach
+- `validate_coverage(envelope)` - raport pokrycia wymagan (total, nieadresowane, zrealizowane, weryfikowane, niespelnione, pokrycie_procent)
+- `update_entry(envelope, req_id, updates)` - reczna aktualizacja wpisu RTM
+- `add_entry(envelope, entry_data)` - dodanie nowego wpisu RTM
+
+Statusy wymagan: `nieadresowane` -> `adresowane` -> `zrealizowane` -> `weryfikowane` / `niespelnione`.
+
+Integracja z Memgraph: wezly `:Wymaganie`, relacje `:ADRESUJE` (Stacja -> Wymaganie), `:WERYFIKUJE` (Stacja -> Wymaganie). Zapis przez `write_rtm_nodes` w `memgraph.py`.
 
 ## 4. Przeplyw danych
 

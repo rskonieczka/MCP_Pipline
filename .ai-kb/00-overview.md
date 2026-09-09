@@ -41,7 +41,7 @@ RTM (Requirements Traceability Matrix): automatyczne sledzenie wymagan przez pip
 - Audyt celu (run 2026-06-29-sprawdzenie-celu-projektu, sciezka doglebny): 14 werdyktow weryfikacji potwierdzonych, 0 obalonych, 2 braki dowodowe (auto-pilot z realnym LLM, Memgraph z realna baza - integracje opcjonalne). Ocena ogolna: wysoka. Wszystkie deklarowane komponenty celu potwierdzone w kodzie i testach funkcjonalnych.
 - Implementacja kodu: 17 modulow Python, 26 narzedzi MCP
 - Skille: 14 wbudowanych (13 stacji + audyt_runu), weryfikacja integralnosci OK
-- Testy: start_run, execute_station, get_run_status, get_next_station, get_envelope, list_checkpoints, close_run, quality_gate (3 iteracje + eskalacja), get_gate_iterations, get_station_contract, list_stations, verify_integrity, stdio protocol - wszystkie PASS
+- Testy: start_run, execute_station, get_run_status, get_next_station, get_envelope, list_checkpoints, close_run, quality_gate (3 iteracje + eskalacja), get_gate_iterations, get_station_contract, list_stations, verify_integrity, stdio protocol - wszystkie PASS. Testy RTM: test_rtm (38 testow: model RTMEntry, ekstrakcja, auto-aktualizacja, walidacja pokrycia, narzedzia MCP, E2E, kompatybilnosc wsteczna) - wszystkie PASS. Total: 55 testow PASS.
 - Zaleznosci: fastmcp 3.4.2, pydantic 2.13.4, pyyaml 6.0.3, neo4j 6.2.0, openai 2.44.0, anthropic 0.113.0
 - Venv: .venv/ z instalacja -e ".[all]"
 - Uruchomienie: .venv/bin/python -m pipeline_mcp.server (stdio MCP)
