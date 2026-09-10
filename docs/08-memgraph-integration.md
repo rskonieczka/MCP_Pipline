@@ -21,21 +21,25 @@ Memgraph jest opcjonalny. Jesli niedostepny, serwer kontynuuje bez zapisu grafu 
 
 ### 3.1. Wezly
 
-| Wezel | Klucz | Wlasciwosci |
+| Wezel | Klucz (ID wezla) | Wlasciwosci |
 |---|---|---|
-| `Run` | run_id | run_id, zamiar, sciezka, status, timestamp_start, timestamp_end |
-| `Stacja` | run_id:stacja | run_id, stacja, status, timestamp, checkpoint |
-| `Zmienna` | run_id:V001 | run_id, variable_id, name, type, source_type |
-| `Decyzja` | run_id:dec001 | run_id, decision_id, opis, stacja_zrodlowa |
-| `Podproblem` | run_id:pp001 | run_id, podproblem_id, opis, krytyczne |
-| `Twierdzenie` | run_id:t001 | run_id, twierdzenie_id, tresc, stacja_zrodlowa |
-| `Werdykt` | run_id:w001 | run_id, werdykt_id, status, twierdzenie_id |
-| `Wniosek` | run_id:wn001 | run_id, wniosek_id, tresc, stacja_zrodlowa |
-| `KrokPlanu` | run_id:k001 | run_id, krok_id, opis, kolejnosc |
-| `Zmiana` | run_id:z001 | run_id, zmiana_id, plik, opis |
-| `WymiarAudytu` | run_id:wa001 | run_id, wymiar, ocena, status |
-| `Checkpoint` | run_id:cp_NN | run_id, stacja, sciezka, timestamp |
-| `Wymaganie` | run_id:REQ-001 | run_id, req_id, opis, status, zrodlo |
+| `Run` | `run:<client_id>:<run_id>` (legacy: `run:<run_id>`) | run_id, zamiar, sciezka, status, client_id, timestamp_start, timestamp_end |
+| `Stacja` | `stacja:<client_id>:<run_id>:<station>` (legacy: `stacja:<run_id>:<station>`) | run_id, stacja, status, client_id, timestamp, checkpoint |
+| `Zmienna` | `zmienna:<run_id>:<id>` | run_id, variable_id, name, type, source_type |
+| `Decyzja` | `decyzja:<run_id>:<id>` | run_id, decision_id, opis, stacja_zrodlowa |
+| `Podproblem` | `podproblem:<run_id>:<id>` | run_id, podproblem_id, opis, krytyczne |
+| `Twierdzenie` | `twierdzenie:<run_id>:<id>` | run_id, twierdzenie_id, tresc, stacja_zrodlowa |
+| `Werdykt` | `werdykt:<run_id>:<id>` | run_id, werdykt_id, status, twierdzenie_id |
+| `Wniosek` | `wniosek:<run_id>:<id>` | run_id, wniosek_id, tresc, stacja_zrodlowa |
+| `KrokPlanu` | `krok:<run_id>:<id>` | run_id, krok_id, opis, kolejnosc |
+| `Zmiana` | `zmiana:<run_id>:<id>` | run_id, zmiana_id, plik, opis |
+| `WymiarAudytu` | `wymiar:<run_id>:<id>` | run_id, wymiar, ocena, status |
+| `Checkpoint` | `checkpoint:<run_id>:<id>` | run_id, stacja, sciezka, timestamp |
+| `Wymaganie` | `wymaganie:<client_id>:<run_id>:<req_id>` (legacy: `wymaganie:<run_id>:<req_id>`) | run_id, req_id, opis, status, zrodlo, client_id |
+| `Wiedza` | `wiedza:<knowledge_id>` | knowledge_id, category, title, content, client_id="shared" |
+| `Pamiec` | `pamiec:<client_id>:<memory_id>` (shared: `pamiec:shared:<memory_id>`) | memory_id, client_id, topic, content, scope |
+
+**Izolacja wieloklientowa**: `client_id` jest wbudowane w ID wezlow `Run`, `Stacja`, `Wymaganie`, `Pamiec` - zapobiega kolizjom miedzy klientami przy tym samym `run_id` lub `memory_id`. Wezly `Wiedza` sa wspoldzielone (`client_id="shared"`). Tryb legacy (brak `client_id`) zachowuje stare konwencje ID dla kompatybilnosci wstecz.
 
 ### 3.2. Krawedzie
 
@@ -62,121 +66,65 @@ Memgraph jest opcjonalny. Jesli niedostepny, serwer kontynuuje bez zapisu grafu 
 
 Po kazdej stacji serwer zapisuje wezly i krawedzie na podstawie sekcji `relacje` w kopercie.
 
-`memgraph.py`:
+`memgraph.py` (funkcje modulowe, nie klasa - lazy init sterownika):
 
 ```python
-from neo4j import GraphDatabase
+def _run_node_id(run_id: str, client_id: str = "") -> str:
+    """ID wezla Run z izolacja client_id (legacy gdy client_id puste)."""
+    return f"run:{client_id}:{run_id}" if client_id else f"run:{run_id}"
 
-class MemgraphClient:
-    def __init__(self, url: str = "bolt://localhost:7687"):
-        self.driver = GraphDatabase.driver(url)
+def _station_node_id(run_id: str, station: str, client_id: str = "") -> str:
+    return f"stacja:{client_id}:{run_id}:{station}" if client_id else f"stacja:{run_id}:{station}"
 
-    def write_run_node(self, run_id: str, zamiar: str, sciezka: str):
-        with self.driver.session() as session:
-            session.run(
-                "MERGE (r:Run {id: $run_node_id}) "
-                "SET r.run_id = $run_id, r.zamiar = $zamiar, "
-                "r.sciezka = $sciezka, r.status = 'w_trakcie'",
-                run_node_id=f"run:{run_id}", run_id=run_id,
-                zamiar=zamiar, sciezka=sciezka
-            )
+def _req_node_id(run_id: str, req_id: str, client_id: str = "") -> str:
+    return f"wymaganie:{client_id}:{run_id}:{req_id}" if client_id else f"wymaganie:{run_id}:{req_id}"
 
-    def write_station_node(self, run_id: str, station: str,
-                           status: str, checkpoint: str):
-        with self.driver.session() as session:
-            session.run(
-                "MERGE (s:Stacja {id: $station_id}) "
-                "SET s.run_id = $run_id, s.stacja = $station, "
-                "s.status = $status, s.checkpoint = $checkpoint",
-                station_id=f"stacja:{run_id}:{station}", run_id=run_id,
-                station=station, status=status, checkpoint=checkpoint
-            )
 
-    def write_relation(self, source: str, target: str,
-                       rel_type: str, fields: list = None):
-        # MERGE wezlow z labelami na podstawie konwencji id
-        source_label = _label_for_id(source)
-        target_label = _label_for_id(target)
-        with self.driver.session() as session:
-            session.run(
-                f"MERGE (a:{source_label} {{id: $source}}) "
-                f"MERGE (b:{target_label} {{id: $target}}) "
-                f"MERGE (a)-[:{rel_type}]->(b)",
-                source=source, target=target
-            )
+def write_run_node(run_id: str, zamiar: str, sciezka: str, client_id: str = "") -> bool:
+    run_node_id = _run_node_id(run_id, client_id)
+    with driver.session() as session:
+        session.run(
+            "MERGE (r:Run {id: $run_node_id}) "
+            "SET r.run_id = $run_id, r.zamiar = $zamiar, "
+            "r.sciezka = $sciezka, r.status = 'w_trakcie', "
+            "r.client_id = $client_id",
+            run_node_id=run_node_id, run_id=run_id,
+            zamiar=zamiar, sciezka=sciezka, client_id=client_id,
+        )
 
-    def close_run_node(self, run_id: str, timestamp_end: str = ""):
-        with self.driver.session() as session:
-            if timestamp_end:
-                session.run(
-                    "MERGE (r:Run {id: $run_node_id}) "
-                    "SET r.status = 'zakonczony', r.timestamp_end = $timestamp_end",
-                    run_node_id=f"run:{run_id}", timestamp_end=timestamp_end
-                )
-            else:
-                session.run(
-                    "MERGE (r:Run {id: $run_node_id}) "
-                    "SET r.status = 'zakonczony'",
-                    run_node_id=f"run:{run_id}"
-                )
+def write_station_node(run_id: str, station: str, status: str,
+                       checkpoint: str = "", client_id: str = "") -> bool:
+    station_id = _station_node_id(run_id, station, client_id)
+    # ... MERGE + SET z client_id
 
-    def write_relations_from_envelope(self, run_id: str, relacje: list):
-        for rel in relacje:
-            self.write_relation(rel["zrodlo"], rel["cel"],
-                               rel["typ"].upper(), rel.get("pola"))
+def close_run_node(run_id: str, timestamp_end: str = "", client_id: str = "") -> bool:
+    run_node_id = _run_node_id(run_id, client_id)
+    # ... MERGE + SET status='zakonczony'
 
-    def write_rtm_nodes(self, run_id: str, envelope):
-        """Zapisuje wezly Wymaganie i relacje ADRESUJE/WERYFIKUJE z RTM."""
-        for entry in envelope.rtm:
-            req_node_id = f"wymaganie:{run_id}:{entry.req_id}"
-            with self.driver.session() as session:
-                # Wezel Wymaganie
-                session.run(
-                    "MERGE (w:Wymaganie {id: $req_node_id}) "
-                    "SET w.req_id = $req_id, w.opis = $opis, "
-                    "w.status = $status, w.zrodlo = $zrodlo",
-                    req_node_id=req_node_id, req_id=entry.req_id,
-                    opis=entry.opis, status=entry.status,
-                    zrodlo=entry.zrodlo,
-                )
-                # Relacja: Run ZAWIERA Wymaganie
-                session.run(
-                    "MERGE (r:Run {id: $run_node_id}) "
-                    "MERGE (w:Wymaganie {id: $req_node_id}) "
-                    "MERGE (r)-[:ZAWIERA]->(w)",
-                    run_node_id=f"run:{run_id}",
-                    req_node_id=req_node_id,
-                )
-                # Relacje: Stacja ADRESUJE Wymaganie
-                for stacja in entry.stacje_adresujace:
-                    session.run(
-                        "MERGE (s:Stacja {id: $station_id}) "
-                        "MERGE (w:Wymaganie {id: $req_node_id}) "
-                        "MERGE (s)-[:ADRESUJE]->(w)",
-                        station_id=f"stacja:{run_id}:{stacja}",
-                        req_node_id=req_node_id,
-                    )
-                # Relacja: Stacja WERYFIKUJE Wymaganie
-                if entry.stacja_weryfikujaca:
-                    session.run(
-                        "MERGE (s:Stacja {id: $station_id}) "
-                        "MERGE (w:Wymaganie {id: $req_node_id}) "
-                        "MERGE (s)-[:WERYFIKUJE]->(w)",
-                        station_id=f"stacja:{run_id}:{entry.stacja_weryfikujaca}",
-                        req_node_id=req_node_id,
-                    )
+def write_client_memory_node(memory_id: str, client_id: str, topic: str,
+                             content: str, scope: str = "client") -> bool:
+    effective_client_id = client_id if scope == "client" else "shared"
+    node_id = f"pamiec:{effective_client_id}:{memory_id}"
+    # ... MERGE + SET z client_id, topic, content, scope
 
-    def validate_graph_continuity(self, run_id: str) -> list:
-        """Walidacja ciaglosci grafu - czy stacja biezaca nastapila po stacji zakonczonej."""
-        with self.driver.session() as session:
-            result = session.run(
-                "MATCH (s:Stacja {run_id: $run_id}) "
-                "WHERE NOT (s)-[:NASTAPILA_PO]->(:Stacja {status: 'zakonczona'}) "
-                "AND s.status = 'w_trakcie' "
-                "RETURN s.stacja as stacja",
-                run_id=run_id
-            )
-            return [r["stacja"] for r in result]
+def write_shared_knowledge_node(knowledge_id: str, category: str,
+                                title: str, content: str) -> bool:
+    node_id = f"wiedza:{knowledge_id}"
+    # ... MERGE + SET z client_id='shared'
+
+def delete_client_nodes(client_id: str) -> bool:
+    """GDPR right to be forgotten - usuniecie wezlow klienta z grafu."""
+    with driver.session() as session:
+        session.run(
+            "MATCH (n) WHERE n.client_id = $client_id "
+            "AND n.client_id <> 'shared' "
+            "DETACH DELETE n",
+            client_id=client_id,
+        )
+
+def validate_graph_continuity(run_id: str, client_id: str = "") -> list[str]:
+    # Filtr po client_id jesli podany
+    ...
 ```
 
 ## 5. Walidacja po checkpoincie

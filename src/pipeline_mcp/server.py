@@ -1,6 +1,14 @@
 """Serwer FastMCP z narzedziami pipeline'u.
 
 Glowny punkt wejscia. Rejestruje wszystkie narzedzia MCP.
+
+MT: System wieloklientowy (multi-tenant). Kazde narzedzie przyjmuje opcjonalny
+parametr client_id. Gdy podany - dane izolowane per-klient. Gdy pusty - tryb
+legacy (kompatybilnosc wsteczna). Hierarchia rozwiazywania client_id:
+1. Jawny parametr client_id w wywolaniu
+2. Aktywny klient sesji (set_active_client)
+3. PIPELINE_DEFAULT_CLIENT_ID (env var)
+4. Tryb legacy (client_id = "")
 """
 from __future__ import annotations
 
@@ -39,6 +47,7 @@ from .models import (
     RunClosedError,
     StationNotFoundError,
     StationAlreadyDoneError,
+    ClientIdMismatchError,
 )
 from .checkpoint import (
     get_latest_checkpoint,
@@ -62,14 +71,78 @@ from .skills_loader import (
     verify_skills_integrity,
 )
 
+# MT: Rejestr klientow, wiedza, RAG, pamiec
+from . import client_registry
+from . import knowledge
+from . import rag
+from . import client_memory
+
 # Auto-pilot (lazy import zeby uniknac bledow jesli LLM nie skonfigurowany)
 from . import auto_pilot
 
 logger = logging.getLogger(__name__)
 
-# Singleton serwera
+# MT: Stan sesji - aktywny klient per polaczenie MCP (stdio = jedno polaczenie)
+_active_client_id: str = ""
+
+
+def _resolve_client_id(explicit: str = "") -> str:
+    """Rozwiazuje client_id wg hierarchii priorytetow.
+
+    1. Jawny parametr explicit (nadpisuje wszystko)
+    2. Aktywny klient sesji (_active_client_id)
+    3. PIPELINE_DEFAULT_CLIENT_ID (env var)
+    4. Pusty string (tryb legacy)
+    """
+    if explicit:
+        return explicit
+    if _active_client_id:
+        return _active_client_id
+    config = get_config()
+    if config.default_client_id:
+        return config.default_client_id
+    return ""
+
+
+def _ws(workspace: str) -> str | None:
+    """Pomocnik: konwertuje pusty string na None."""
+    return workspace if workspace else None
+
+
+def _ensure_client_id_match(manifest: Manifest, client_id: str) -> None:
+    """MT: Sprawdza czy client_id zgadza sie z manifeście run'u.
+
+    Chroni przed cross-client access: jesli run nalezy do klienta A,
+    a wywolanie przychodzi z client_id=B, rzuc blad.
+    Run'y legacy (client_id="") sa dostepne z dowolnym client_id.
+    """
+    if manifest.client_id and client_id and manifest.client_id != client_id:
+        raise ClientIdMismatchError(
+            f"Run '{manifest.run_id}' nalezy do klienta '{manifest.client_id}', "
+            f"a wywolano z client_id='{client_id}'. Brak dostepu cross-client."
+        )
+
+
 PIPELINE_INSTRUCTIONS = """\
 Pipeline MCP Server orkiestruje prace agenta AI przez 13 stacji w petli pipeline.
+
+## Wieloklientowosc (multi-tenant)
+
+Jesli obslugujesz wielu klientow w jednym workspace:
+
+1. Wywolaj `resolve_client(query)` z nazwa, aliasem, NIP, telefonem lub fragmentem.
+   - Przy 100% pewnosci (NIP, telefon) klient jest auto-rozpoznany.
+   - Ponizej 100% zwraca kandydatow - zapytaj uzytkownika o potwierdzenie.
+2. Po potwierdzeniu wywolaj `set_active_client(client_id)` z kanonicznym ID.
+3. Wszystkie kolejne operacje pipeline beda izolowane per ten klient.
+4. Jesli klient nie istnieje, zarejestruj go przez `register_client`.
+5. Wiedza wspoldzielona jest dostepna przez narzedzia `save_shared_knowledge`,
+   `get_shared_knowledge`, `search_shared_knowledge`.
+6. Pamiec AI per-klient: `save_client_memory`, `get_client_memory`, `list_client_memories`.
+7. RAG per-klient: `index_client_document`, `search_client_rag`, `search_shared_rag`.
+
+Jesli nie ustawisz aktywnego klienta, pipeline dziala w trybie legacy
+(wszystkie run'y we wspolnym katalogu, bez izolacji).
 
 ## Jak uzywac
 
@@ -87,6 +160,7 @@ Pipeline MCP Server orkiestruje prace agenta AI przez 13 stacji w petli pipeline
 - Skille stacji sa wbudowane w serwer - uzyj `get_station_contract` aby pobrac prompt skilla.
 - Bramka jakosci max 2 iteracje - po eskalacji wymagana interwencja uzytkownika.
 - `workspace` jest opcjonalny - domyslnie uzywa cwd (katalog projektu).
+- `client_id` jest opcjonalny - domyslnie uzywa aktywnego klienta sesji lub trybu legacy.
 - RTM (Requirements Traceability Matrix) sledzi wymagania przez pipeline automatycznie.
   Uzyj `get_rtm` aby pobrac macierz, `validate_rtm_coverage` do raportu pokrycia.
 
@@ -103,13 +177,8 @@ mcp = FastMCP("Pipeline MCP Server", instructions=PIPELINE_INSTRUCTIONS)
 
 
 def _generate_run_id(zamiar: str) -> str:
-    """Generuje run_id w formacie <YYYY-MM-DD>-<skrot-zamiaru>.
-
-    Skrot jest sanityzowany do [a-z0-9-], aby run_id byl bezpieczna
-    nazwa katalogu (bez separatorow sciezek i znakow specjalnych).
-    """
+    """Generuje run_id w formacie <YYYY-MM-DD>-<skrot-zamiaru>."""
     date_str = datetime.now().strftime("%Y-%m-%d")
-    # Skrot zamiaru: pierwsze 3 slowa, max 30 znakow, bez polskich znakow
     import unicodedata
     normalized = unicodedata.normalize("NFKD", zamiar)
     ascii_zamiar = normalized.encode("ascii", "ignore").decode()
@@ -120,16 +189,13 @@ def _generate_run_id(zamiar: str) -> str:
     return f"{date_str}-{skrot}" if skrot else f"{date_str}-run"
 
 
-def _unique_run_id(run_id: str, workspace: str | None) -> str:
-    """Zapewnia unikalnosc run_id - przy kolizji dodaje sufiks -2, -3, ...
-
-    Chroni istniejace run'y przed nadpisaniem manifestu.
-    """
+def _unique_run_id(run_id: str, workspace: str | None, client_id: str = "") -> str:
+    """Zapewnia unikalnosc run_id - przy kolizji dodaje sufiks -2, -3, ..."""
     config = get_config()
-    if not config.manifest_path(run_id, workspace).exists():
+    if not config.manifest_path(run_id, workspace, client_id).exists():
         return run_id
     counter = 2
-    while config.manifest_path(f"{run_id}-{counter}", workspace).exists():
+    while config.manifest_path(f"{run_id}-{counter}", workspace, client_id).exists():
         counter += 1
     return f"{run_id}-{counter}"
 
@@ -152,6 +218,7 @@ def start_run(
     zrodla: list[str] | None = None,
     tryb_inicjacji: str = "pelny",
     workspace: str = "",
+    client_id: str = "",
 ) -> dict[str, Any]:
     """Tworzy nowy run pipeline'u. Generuje run_id, tworzy manifest i pusta koperte.
 
@@ -161,68 +228,79 @@ def start_run(
         zrodla: Zrodla bazowe (opcjonalne)
         tryb_inicjacji: "szybki" lub "pelny" (domyslnie "pelny")
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny). Jesli pusty, uzywa aktywnego klienta sesji.
 
     Returns:
         Slownik z run_id, first_station, manifest_path, envelope
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     if not zamiar:
         raise PipelineError("Zamiar jest wymagany")
 
+    # F4: waliduj istnienie klienta w rejestrze (zapobiega osieroconym katalogom)
+    if cid:
+        existing = client_registry.load_client(cid, ws)
+        if existing is None:
+            from .models import ClientNotFoundError
+            raise ClientNotFoundError(
+                f"Klient '{cid}' nie istnieje w rejestrze. "
+                "Uzyj register_client aby go utworzyc, lub usun client_id aby dzialac w trybie legacy."
+            )
+
     config = get_config()
-    run_id = _unique_run_id(_generate_run_id(zamiar), ws)
+    run_id = _unique_run_id(_generate_run_id(zamiar), ws, cid)
 
     # Utworz katalog run'u
-    run_dir = config.run_dir(run_id, ws)
+    run_dir = config.run_dir(run_id, ws, cid)
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Utworz manifest (sciezka domyslnie pelny, inicjuj ustali ostateczna)
-    manifest = create_manifest(run_id, zamiar, sciezka="pelny")
+    manifest = create_manifest(run_id, zamiar, sciezka="pelny", client_id=cid)
     manifest = add_station_to_manifest(manifest, "inicjuj", "w_trakcie")
-    save_manifest(manifest, config.manifest_path(run_id, ws))
+    save_manifest(manifest, config.manifest_path(run_id, ws, cid))
 
     # Utworz pusta koperte
-    envelope = create_envelope(run_id, zamiar, sciezka="pelny")
+    envelope = create_envelope(run_id, zamiar, sciezka="pelny", client_id=cid)
 
-    # Zapisz wejscie uzytkownika do koperty (kontrakt stacji inicjuj:
-    # KONTEKST, ZRODLA, TRYB_INICJACJI) i utrwal jako checkpoint inicjalny.
+    # Zapisz wejscie uzytkownika do koperty
     wejscie = {
         "kontekst": kontekst,
         "zrodla": zrodla or [],
         "tryb_inicjacji": tryb_inicjacji,
     }
-    # U8: wejscie w osobnym polu, nie w pola_stacji (bo _wejscie nie jest stacja)
     if any([kontekst, zrodla]):
         envelope.wejscie = wejscie
-        save_checkpoint(run_id, "_start", envelope, "", ws)
+        save_checkpoint(run_id, "_start", envelope, "", ws, cid)
 
     # Zapisz wezel Run do Memgraph (A1: strukturalny wezel grafu)
     from . import memgraph
-    memgraph.write_run_node(run_id, zamiar, "pelny")
+    memgraph.write_run_node(run_id, zamiar, "pelny", cid)
 
     return {
         "run_id": run_id,
         "first_station": "inicjuj",
-        "manifest_path": str(config.manifest_path(run_id, ws)),
+        "manifest_path": str(config.manifest_path(run_id, ws, cid)),
+        "client_id": cid,
         "wejscie": wejscie,
         "envelope": envelope.model_dump(),
     }
 
 
 @mcp.tool
-def get_run_status(run_id: str, workspace: str = "") -> dict[str, Any]:
+def get_run_status(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Zwraca status run'u na podstawie manifestu.
 
     Args:
         run_id: Identyfikator run'u
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
-
-    Returns:
-        Status run'u z lista stacji i ich statusami
+        client_id: Identyfikator klienta (opcjonalny).
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
 
     return {
         "run_id": manifest.run_id,
@@ -234,29 +312,35 @@ def get_run_status(run_id: str, workspace: str = "") -> dict[str, Any]:
         "stacje": [s.model_dump() for s in manifest.stacje],
         "timestamp_start": manifest.timestamp_start,
         "timestamp_end": manifest.timestamp_end,
+        "client_id": manifest.client_id,
     }
 
 
 @mcp.tool
-def list_runs(status_filter: str = "", limit: int = 50, workspace: str = "") -> list[dict[str, Any]]:
+def list_runs(
+    status_filter: str = "", limit: int = 50, workspace: str = "", client_id: str = ""
+) -> list[dict[str, Any]]:
     """Lista wszystkich run'ow w katalogu persystencji.
+
+    MT: Gdy client_id podany, zwraca tylko run'y tego klienta.
+    Gdy client_id pusty i brak aktywnego klienta, zwraca run'y legacy.
 
     Args:
         status_filter: Filtr statusu ("", "w_trakcie", "zakonczony", "zablokowany")
         limit: Maksymalna liczba wynikow
-        workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
-
-    Returns:
-        Lista run'ow z metadanymi
+        workspace: Sciezka do workspace'a (opcjonalna).
+        client_id: Identyfikator klienta (opcjonalny).
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
     runs: list[dict[str, Any]] = []
 
-    if not config.runs_dir_for(ws).exists():
+    runs_dir = config.runs_dir_for(ws, cid)
+    if not runs_dir.exists():
         return []
 
-    for run_dir in sorted(config.runs_dir_for(ws).iterdir(), reverse=True):
+    for run_dir in sorted(runs_dir.iterdir(), reverse=True):
         if not run_dir.is_dir():
             continue
 
@@ -276,6 +360,7 @@ def list_runs(status_filter: str = "", limit: int = 50, workspace: str = "") -> 
                 "status": manifest.status_runu,
                 "stacja_aktualna": get_last_completed_station(manifest) or "inicjuj",
                 "timestamp_start": manifest.timestamp_start,
+                "client_id": manifest.client_id,
             })
 
             if len(runs) >= limit:
@@ -287,42 +372,36 @@ def list_runs(status_filter: str = "", limit: int = 50, workspace: str = "") -> 
 
 
 @mcp.tool
-def resume_run(run_id: str, workspace: str = "") -> dict[str, Any]:
+def resume_run(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Wznawia run od ostatniej zakonczonej stacji.
 
     Args:
         run_id: Identyfikator run'u
-        workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
-
-    Returns:
-        Stacja wznowienia i zaladowana koperta
+        workspace: Sciezka do workspace'a (opcjonalna).
+        client_id: Identyfikator klienta (opcjonalny).
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
     last_station = get_last_completed_station(manifest)
     if not last_station:
-        # Brak zakonczonych stacji - zaczynamy od inicjuj
         return {
             "run_id": run_id,
             "stacja_wznowienia": "inicjuj",
-            "envelope": create_envelope(run_id, manifest.zamiar, manifest.sciezka).model_dump(),
+            "envelope": create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id).model_dump(),
             "walidacja": {"status": "gotowy"},
         }
 
-    # Zaladuj ostatni checkpoint
-    latest = get_latest_checkpoint(run_id, ws)
+    latest = get_latest_checkpoint(run_id, ws, cid)
     if not latest:
         raise RunNotFoundError(f"Brak checkpointu dla run'u {run_id}")
 
     _, envelope = latest
-
-    # Wyznacz nastepna stacje
     next_station = routing_get_next_station(last_station, manifest.sciezka)
-
-    # Waliduj wejscie nastepnej stacji
     walidacja = validate_input(next_station, envelope) if next_station else None
 
     return {
@@ -334,45 +413,39 @@ def resume_run(run_id: str, workspace: str = "") -> dict[str, Any]:
 
 
 @mcp.tool
-def close_run(run_id: str, workspace: str = "") -> dict[str, Any]:
+def close_run(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Zamyka run. Zapisuje ostateczna koperte, oznacza run jako zakonczony.
 
     Args:
         run_id: Identyfikator run'u
-        workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
-
-    Returns:
-        Status zamkniecia
+        workspace: Sciezka do workspace'a (opcjonalna).
+        client_id: Identyfikator klienta (opcjonalny).
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
 
-    # Idempotencja: ponowne zamkniecie nie nadpisuje timestamp_end
     if manifest.status_runu == "zakonczony":
         return {
             "run_id": run_id,
             "status": "zakonczony",
-            "envelope_final_path": str(config.envelope_final_path(run_id, ws)),
+            "envelope_final_path": str(config.envelope_final_path(run_id, ws, cid)),
             "stacje_wykonane": len([s for s in manifest.stacje if s.status == "zakonczona"]),
             "iteracje_bramki": manifest.iteracja_bramki,
             "already_closed": True,
         }
 
-    # Zaladuj ostatnia koperte
-    latest = get_latest_checkpoint(run_id, ws)
-    envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka)
+    latest = get_latest_checkpoint(run_id, ws, cid)
+    envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
 
-    # Zapisz ostateczna koperte
-    envelope_path = save_envelope_final(run_id, envelope, ws)
-
-    # Zamknij manifest
+    envelope_path = save_envelope_final(run_id, envelope, ws, cid)
     manifest = close_manifest(manifest)
-    save_manifest(manifest, config.manifest_path(run_id, ws))
+    save_manifest(manifest, config.manifest_path(run_id, ws, cid))
 
-    # Zamknij wezel Run w Memgraph
     from . import memgraph
-    memgraph.close_run_node(run_id, manifest.timestamp_end or "")
+    memgraph.close_run_node(run_id, manifest.timestamp_end or "", manifest.client_id)
 
     return {
         "run_id": run_id,
@@ -395,33 +468,29 @@ def execute_station(
     output: dict[str, Any],
     skip_validation: bool = False,
     workspace: str = "",
+    client_id: str = "",
 ) -> dict[str, Any]:
     """Rejestruje wynik wykonania stacji przez agenta (tryb manual).
-
-    Aktualizuje koperte, zapisuje checkpoint, wyznacza nastepna stacje.
 
     Args:
         run_id: Identyfikator run'u
         station: Nazwa stacji (np. "inicjuj")
         output: Wyjscie stacji (pola kontraktu wyjsciowego)
         skip_validation: Pomin walidacje kontraktu (domyslnie False)
-        workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
-
-    Returns:
-        Status wykonania, nastepna stacja, walidacja, sciezka checkpointu
+        workspace: Sciezka do workspace'a (opcjonalna).
+        client_id: Identyfikator klienta (opcjonalny).
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     if not station_exists(station):
         raise StationNotFoundError(f"Stacja '{station}' nie istnieje")
 
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
-    # A8: audyt_runu to stacja audytowa ex-post, dozwolona po zamknieciu run'u
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
     if station != "audyt_runu":
         _ensure_run_open(manifest)
 
-    # Sprawdz czy stacja juz zakonczona (po powrocie bramki statusy stacji
-    # petli sa resetowane na 'w_trakcie', wiec ponowne wykonanie jest dozwolone)
     existing_status = get_station_status(manifest, station)
     if existing_status == "zakonczona" and not skip_validation:
         raise StationAlreadyDoneError(
@@ -429,34 +498,27 @@ def execute_station(
             "Aby wymusic ponowne wykonanie, uzyj skip_validation=True."
         )
 
-    # Zaladuj aktualna koperte
-    latest = get_latest_checkpoint(run_id, ws)
-    envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka)
+    latest = get_latest_checkpoint(run_id, ws, cid)
+    envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
 
-    # Aktualizuj koperte
     envelope = update_station_fields(envelope, station, output)
     envelope = accumulate_state(envelope, station, output)
     envelope = add_station_relations(envelope, station, run_id)
 
-    # Automatyczna aktualizacja RTM (Requirements Traceability Matrix)
     rtm_auto_update(envelope, station, output)
 
-    # Jesli inicjuj - ustal sciezke na podstawie klasyfikacji
     if station == "inicjuj":
         klasyfikacja = output.get("klasyfikacja", "rutynowe")
         sciezka = determine_path(klasyfikacja)
         envelope.sciezka = sciezka  # type: ignore
         manifest.sciezka = sciezka  # type: ignore
 
-    # U3: jesli routing - nadpisz sciezke na podstawie wyjscia stacji routing
-    # (stacja routing w sciezce doglebny rewizuje wybor sciezki)
     if station == "routing" and output.get("sciezka"):
         nowa_sciezka = output["sciezka"]
         if nowa_sciezka in ("szybki", "pelny", "doglebny"):
             envelope.sciezka = nowa_sciezka  # type: ignore
             manifest.sciezka = nowa_sciezka  # type: ignore
 
-    # Waliduj wejscie nastepnej stacji
     next_station = routing_get_next_station(station, envelope.sciezka)
     validation = validate_input(next_station, envelope) if next_station else None
 
@@ -468,30 +530,22 @@ def execute_station(
         envelope.walidacja.status = validation.status  # type: ignore
         envelope.walidacja.akcja_naprawcza = validation.akcja_naprawcza
 
-    # Zapisz checkpoint (w petli bramki z sufiksem _iter<N>, aby nie nadpisac
-    # checkpointu z poprzedniej iteracji)
     suffix = f"_iter{manifest.iteracja_bramki}" if manifest.iteracja_bramki > 0 else ""
-    checkpoint_path = save_checkpoint(run_id, station, envelope, suffix, ws)
+    checkpoint_path = save_checkpoint(run_id, station, envelope, suffix, ws, cid)
 
-    # U2: kompresja koperty w sciezce doglebny po stacjach wyzwalajacych -
-    # pelne dane pozostaja w checkpointach, koperta w kontekscie jest lzejsza
     if envelope.sciezka == "doglebny" and station in ("analiza", "dobierz", "sprawdzenie"):
         envelope = compress_envelope(envelope)
 
-    # Aktualizuj manifest
     manifest = update_station_status(manifest, station, "zakonczona", checkpoint_path)
-    save_manifest(manifest, config.manifest_path(run_id, ws))
+    save_manifest(manifest, config.manifest_path(run_id, ws, cid))
 
-    # Zapisz wezel Stacja i relacje do Memgraph (A1: strukturalne wezly grafu)
     from . import memgraph
     station_written = memgraph.write_station_node(
-        run_id, station, "zakonczona", checkpoint_path
+        run_id, station, "zakonczona", checkpoint_path, manifest.client_id
     )
-    # Po stacji inicjuj zaktualizuj sciezke we wezle Run
     if station == "inicjuj":
-        memgraph.write_run_node(run_id, envelope.stan.zamiar, manifest.sciezka)
+        memgraph.write_run_node(run_id, envelope.stan.zamiar, manifest.sciezka, manifest.client_id)
     relations_written = memgraph.write_relations_from_envelope(run_id, envelope)
-    # A6: memgraph_written=true tylko gdy oba zapisy powiodly sie
     memgraph_written = station_written and relations_written
 
     return {
@@ -507,19 +561,22 @@ def execute_station(
 
 
 @mcp.tool
-def get_next_station(run_id: str, workspace: str = "") -> dict[str, Any]:
+def get_next_station(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Zwraca nastepna stacje na podstawie aktualnego stanu run'u.
 
     Args:
         run_id: Identyfikator run'u
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Nastepna stacja, sciezka, czy ostatnia stacja
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
 
     last_station = get_last_completed_station(manifest)
     if not last_station:
@@ -546,42 +603,39 @@ def get_next_station(run_id: str, workspace: str = "") -> dict[str, Any]:
 
 @mcp.tool
 def skip_station(
-    run_id: str,
-    station: str,
-    reason: str = "",
-    workspace: str = "",
+    run_id: str, station: str, reason: str = "", workspace: str = "", client_id: str = ""
 ) -> dict[str, Any]:
-    """Ręczne pominiecie stacji (tryb hybrydowy).
+    """Reczne pominiecie stacji (tryb hybrydowy).
 
     Args:
         run_id: Identyfikator run'u
         station: Nazwa stacji do pominiecia
         reason: Powod pominiecia
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Status pominiecia i nastepna stacja
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     if not station_exists(station):
         raise StationNotFoundError(f"Stacja '{station}' nie istnieje")
 
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
-    # Sprawdz czy stacja jest w sciezce
     if is_station_in_path(station, manifest.sciezka):
         raise PipelineError(
             f"Stacja '{station}' jest w sciezce '{manifest.sciezka}' i nie powinna byc pomijana. "
             "Pominiecie dozwolone tylko dla stacji opcjonalnych."
         )
 
-    # Oznacz jako pominieta
     manifest = update_station_status(manifest, station, "pominieta")
-    save_manifest(manifest, config.manifest_path(run_id, ws))
+    save_manifest(manifest, config.manifest_path(run_id, ws, cid))
 
-    # Wyznacz nastepna stacje
     last_completed = get_last_completed_station(manifest)
     next_station = routing_get_next_station(last_completed or "inicjuj", manifest.sciezka) if last_completed else "inicjuj"
 
@@ -595,13 +649,14 @@ def skip_station(
 
 
 @mcp.tool
-def get_station_contract(run_id: str, station: str, workspace: str = "") -> dict[str, Any]:
+def get_station_contract(run_id: str, station: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Zwraca kontrakt I/O dla stacji: wymagane i opcjonalne pola, mappowanie, prompt skilla.
 
     Args:
         run_id: Identyfikator run'u
         station: Nazwa stacji
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Kontrakt stacji z promptem wbudowanego skilla
@@ -612,7 +667,6 @@ def get_station_contract(run_id: str, station: str, workspace: str = "") -> dict
     station_def = get_station(station)
     mapping = get_mapping_for_station(station)
 
-    # Zaladuj prompt skilla
     try:
         skill = load_skill(station)
         skill_prompt = skill["content"]
@@ -636,22 +690,25 @@ def get_station_contract(run_id: str, station: str, workspace: str = "") -> dict
 
 
 @mcp.tool
-def get_envelope(run_id: str, workspace: str = "") -> dict[str, Any]:
+def get_envelope(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Zwraca aktualna koperte run'u.
 
     Args:
         run_id: Identyfikator run'u
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Pelna koperta run'u
     """
-    ws = workspace if workspace else None
-    latest = get_latest_checkpoint(run_id, ws)
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    latest = get_latest_checkpoint(run_id, ws, cid)
     if not latest:
         config = get_config()
-        manifest = load_manifest(config.manifest_path(run_id, ws))
-        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka)
+        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        _ensure_client_id_match(manifest, cid)
+        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
         return envelope.model_dump()
 
     _, envelope = latest
@@ -665,8 +722,9 @@ def update_envelope(
     fields: dict[str, Any],
     merge: bool = True,
     workspace: str = "",
+    client_id: str = "",
 ) -> dict[str, Any]:
-    """Ręczna aktualizacja koperty (tryb hybrydowy).
+    """Reczna aktualizacja koperty (tryb hybrydowy).
 
     Args:
         run_id: Identyfikator run'u
@@ -674,19 +732,21 @@ def update_envelope(
         fields: Pola do aktualizacji
         merge: True = scal z istniejacymi, False = zastap
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Zaktualizowana koperta (skrot)
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
-    latest = get_latest_checkpoint(run_id, ws)
-    envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka)
+    latest = get_latest_checkpoint(run_id, ws, cid)
+    envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
 
-    # Parsuj section
     if section == "stan":
         if merge:
             for k, v in fields.items():
@@ -729,10 +789,8 @@ def update_envelope(
     else:
         raise PipelineError(f"Nieznana sekcja koperty: '{section}'")
 
-    # Nadpisz checkpoint ostatniej zakonczonej stacji, aby get_latest_checkpoint
-    # widzial aktualny stan (zamiast tworzyc nowy plik spoza manifestu)
     last_station = get_last_completed_station(manifest) or "_start"
-    save_checkpoint(run_id, last_station, envelope, "", ws)
+    save_checkpoint(run_id, last_station, envelope, "", ws, cid)
 
     return {
         "run_id": run_id,
@@ -743,9 +801,7 @@ def update_envelope(
 
 @mcp.tool
 def validate_contract(
-    run_id: str,
-    target_station: str,
-    workspace: str = "",
+    run_id: str, target_station: str, workspace: str = "", client_id: str = ""
 ) -> dict[str, Any]:
     """Waliduje czy wejscie stacji docelowej jest kompletne.
 
@@ -753,19 +809,22 @@ def validate_contract(
         run_id: Identyfikator run'u
         target_station: Stacja docelowa do walidacji
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Wynik walidacji kontraktu
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     if not station_exists(target_station):
         raise StationNotFoundError(f"Stacja '{target_station}' nie istnieje")
 
-    latest = get_latest_checkpoint(run_id, ws)
+    latest = get_latest_checkpoint(run_id, ws, cid)
     if not latest:
         config = get_config()
-        manifest = load_manifest(config.manifest_path(run_id, ws))
-        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka)
+        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        _ensure_client_id_match(manifest, cid)
+        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
     else:
         _, envelope = latest
 
@@ -779,7 +838,7 @@ def validate_contract(
 
 
 @mcp.tool
-def get_rtm(run_id: str, workspace: str = "") -> dict[str, Any]:
+def get_rtm(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Zwraca macierz Requirements Traceability Matrix dla run'u.
 
     RTM mapuje wymagania uzytkownika na stacje adresujace, weryfikujace
@@ -788,16 +847,19 @@ def get_rtm(run_id: str, workspace: str = "") -> dict[str, Any]:
     Args:
         run_id: Identyfikator run'u
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Lista wpisow RTM z metadanymi i raportem pokrycia
     """
-    ws = workspace if workspace else None
-    latest = get_latest_checkpoint(run_id, ws)
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    latest = get_latest_checkpoint(run_id, ws, cid)
     if not latest:
         config = get_config()
-        manifest = load_manifest(config.manifest_path(run_id, ws))
-        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka)
+        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        _ensure_client_id_match(manifest, cid)
+        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
     else:
         _, envelope = latest
 
@@ -810,12 +872,9 @@ def get_rtm(run_id: str, workspace: str = "") -> dict[str, Any]:
 
 @mcp.tool
 def update_rtm(
-    run_id: str,
-    req_id: str,
-    updates: dict[str, Any],
-    workspace: str = "",
+    run_id: str, req_id: str, updates: dict[str, Any], workspace: str = "", client_id: str = ""
 ) -> dict[str, Any]:
-    """Reçzna aktualizacja wpisu Requirements Traceability Matrix.
+    """Reczna aktualizacja wpisu Requirements Traceability Matrix.
 
     Pozwala agentowi nadpisac status wymagania, dodac stacje adresujace
     lub artefakty bez wykonywania pelnej stacji.
@@ -825,30 +884,27 @@ def update_rtm(
         req_id: Identyfikator wymagania (np. "REQ-001")
         updates: Pola do aktualizacji (status, stacje_adresujace, artefakty, ...)
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Zaktualizowany wpis RTM i raport pokrycia
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
-    latest = get_latest_checkpoint(run_id, ws)
-    envelope = latest[1] if latest else create_envelope(
-        run_id, manifest.zamiar, manifest.sciezka
-    )
+    latest = get_latest_checkpoint(run_id, ws, cid)
+    envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
 
     entry = rtm_update_entry(envelope, req_id, updates)
     if entry is None:
-        raise PipelineError(
-            f"Wpis RTM o req_id='{req_id}' nie istnieje w run'u {run_id}"
-        )
+        raise PipelineError(f"Wpis RTM o req_id='{req_id}' nie istnieje w run'u {run_id}")
 
-    # Nadpisz checkpoint ostatniej zakonczonej stacji, aby get_latest_checkpoint
-    # widzial aktualny stan RTM (zamiast tworzyc nowy plik spoza manifestu)
     last_station = get_last_completed_station(manifest) or "_start"
-    save_checkpoint(run_id, last_station, envelope, "", ws)
+    save_checkpoint(run_id, last_station, envelope, "", ws, cid)
 
     return {
         "run_id": run_id,
@@ -866,6 +922,7 @@ def add_rtm_entry(
     stacje_adresujace: list[str] | None = None,
     status: str = "nieadresowane",
     workspace: str = "",
+    client_id: str = "",
 ) -> dict[str, Any]:
     """Dodaje nowy wpis do Requirements Traceability Matrix.
 
@@ -880,19 +937,20 @@ def add_rtm_entry(
         stacje_adresujace: Stacje adresujace to wymaganie
         status: Status poczatkowy (domyslnie "nieadresowane")
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Dodany wpis RTM i raport pokrycia
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
-    latest = get_latest_checkpoint(run_id, ws)
-    envelope = latest[1] if latest else create_envelope(
-        run_id, manifest.zamiar, manifest.sciezka
-    )
+    latest = get_latest_checkpoint(run_id, ws, cid)
+    envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
 
     entry_data: dict[str, Any] = {
         "req_id": req_id,
@@ -908,10 +966,8 @@ def add_rtm_entry(
     except ValueError as e:
         raise PipelineError(str(e))
 
-    # Nadpisz checkpoint ostatniej zakonczonej stacji, aby get_latest_checkpoint
-    # widzial aktualny stan RTM (zamiast tworzyc nowy plik spoza manifestu)
     last_station = get_last_completed_station(manifest) or "_start"
-    save_checkpoint(run_id, last_station, envelope, "", ws)
+    save_checkpoint(run_id, last_station, envelope, "", ws, cid)
 
     return {
         "run_id": run_id,
@@ -921,7 +977,7 @@ def add_rtm_entry(
 
 
 @mcp.tool
-def validate_rtm_coverage(run_id: str, workspace: str = "") -> dict[str, Any]:
+def validate_rtm_coverage(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Waliduje pokrycie wymagan w Requirements Traceability Matrix.
 
     Zwraca raport: liczbe wymagan w poszczegolnych statusach, procent pokrycia,
@@ -930,16 +986,19 @@ def validate_rtm_coverage(run_id: str, workspace: str = "") -> dict[str, Any]:
     Args:
         run_id: Identyfikator run'u
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Raport pokrycia wymagan z lista problematycznych req_id
     """
-    ws = workspace if workspace else None
-    latest = get_latest_checkpoint(run_id, ws)
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    latest = get_latest_checkpoint(run_id, ws, cid)
     if not latest:
         config = get_config()
-        manifest = load_manifest(config.manifest_path(run_id, ws))
-        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka)
+        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        _ensure_client_id_match(manifest, cid)
+        envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
     else:
         _, envelope = latest
 
@@ -961,6 +1020,7 @@ def quality_gate(
     audit_wymiary: dict[str, Any] | None = None,
     loop_target: str = "",
     workspace: str = "",
+    client_id: str = "",
 ) -> dict[str, Any]:
     """Ocenia bramke jakosci po stacji sprawdzenie.
 
@@ -970,39 +1030,41 @@ def quality_gate(
         audit_wymiary: Wymiary audytu (opcjonalne)
         loop_target: Gdzie wrocic przy niezgodnym ("dobierz" lub "planuj")
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Decyzja bramki, nastepna stacja, iteracja
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
-    result = evaluate_gate(
-        run_id, manifest, audit_status, audit_wymiary or {}, loop_target
-    )
-
-    # Zapisz zaktualizowany manifest (iteracja bramki)
-    save_manifest(manifest, config.manifest_path(run_id, ws))
+    result = evaluate_gate(run_id, manifest, audit_status, audit_wymiary or {}, loop_target)
+    save_manifest(manifest, config.manifest_path(run_id, ws, cid))
 
     return result.model_dump()
 
 
 @mcp.tool
-def get_gate_iterations(run_id: str, workspace: str = "") -> dict[str, Any]:
+def get_gate_iterations(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Zwraca historie iteracji bramki dla run'u.
 
     Args:
         run_id: Identyfikator run'u
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Aktualna iteracja, max iteracje, pozostale
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
     return get_gate_history(run_id, manifest)
 
 
@@ -1018,8 +1080,9 @@ def save_checkpoint_tool(
     envelope: dict[str, Any],
     suffix: str = "",
     workspace: str = "",
+    client_id: str = "",
 ) -> dict[str, Any]:
-    """Ręczny zapis checkpointu (normalnie wywolywane automatycznie przez execute_station).
+    """Reczny zapis checkpointu (normalnie wywolywane automatycznie przez execute_station).
 
     Args:
         run_id: Identyfikator run'u
@@ -1027,13 +1090,15 @@ def save_checkpoint_tool(
         envelope: Koperta do zapisania
         suffix: Sufiks nazwy pliku (np. "_iter1")
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Sciezka zapisanego checkpointu
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     env = Envelope(**envelope)
-    path = save_checkpoint(run_id, station, env, suffix, ws)
+    path = save_checkpoint(run_id, station, env, suffix, ws, cid)
     return {
         "run_id": run_id,
         "station": station,
@@ -1044,10 +1109,7 @@ def save_checkpoint_tool(
 
 @mcp.tool
 def load_checkpoint_tool(
-    run_id: str,
-    station: str,
-    suffix: str = "",
-    workspace: str = "",
+    run_id: str, station: str, suffix: str = "", workspace: str = "", client_id: str = ""
 ) -> dict[str, Any]:
     """Odczyt checkpointu stacji.
 
@@ -1056,12 +1118,14 @@ def load_checkpoint_tool(
         station: Nazwa stacji
         suffix: Sufiks nazwy pliku (np. "_iter1")
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Koperta z checkpointu
     """
-    ws = workspace if workspace else None
-    env = load_checkpoint(run_id, station, suffix, ws)
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    env = load_checkpoint(run_id, station, suffix, ws, cid)
     return {
         "run_id": run_id,
         "station": station,
@@ -1071,18 +1135,20 @@ def load_checkpoint_tool(
 
 
 @mcp.tool
-def list_checkpoints_tool(run_id: str, workspace: str = "") -> list[dict[str, Any]]:
+def list_checkpoints_tool(run_id: str, workspace: str = "", client_id: str = "") -> list[dict[str, Any]]:
     """Lista wszystkich checkpointow dla run'u.
 
     Args:
         run_id: Identyfikator run'u
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Lista checkpointow z metadanymi
     """
-    ws = workspace if workspace else None
-    return list_checkpoints(run_id, ws)
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    return list_checkpoints(run_id, ws, cid)
 
 
 # =====================================================================
@@ -1090,7 +1156,6 @@ def list_checkpoints_tool(run_id: str, workspace: str = "") -> list[dict[str, An
 # =====================================================================
 
 
-# Bezpiecznik petli auto-pilota (13 stacji + iteracje bramki + zapas)
 _AUTO_PILOT_MAX_STEPS = 40
 
 
@@ -1101,6 +1166,7 @@ def auto_pilot_start(
     to_station: str = "",
     max_gate_iterations: int = 2,
     workspace: str = "",
+    client_id: str = "",
 ) -> dict[str, Any]:
     """Uruchamia tryb auto-pilot. Serwer synchronicznie wykonuje stacje,
     wywolujac LLM dla kazdej z nich, az do konca sciezki lub blokady.
@@ -1111,13 +1177,16 @@ def auto_pilot_start(
         to_station: Stacja koncowa (puste = do konca pipeline'u)
         max_gate_iterations: Max powrotow bramki tolerowanych przez auto-pilot
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Finalny status auto-pilota, wykonane stacje, bledy
     """
-    ws = workspace if workspace else None
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws))
+    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
     auto_pilot.start_auto_pilot(run_id, from_station, to_station, max_gate_iterations)
@@ -1125,8 +1194,6 @@ def auto_pilot_start(
     executed: list[str] = []
     bledy: list[str] = []
     final_status = "zakonczony"
-    # U5: usunieto podwojny licznik gate_returns - polegamy wylacznie
-    # na quality_gate (gate_decision == "eskalacja") zarzadzajacej limitem
     station: str | None = from_station or None
 
     for _ in range(_AUTO_PILOT_MAX_STEPS):
@@ -1134,18 +1201,15 @@ def auto_pilot_start(
             final_status = "zatrzymany"
             break
 
-        manifest = load_manifest(config.manifest_path(run_id, ws))
+        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
         if station is None:
             last = get_last_completed_station(manifest)
             station = routing_get_next_station(last, manifest.sciezka) if last else "inicjuj"
         if station is None:
-            break  # koniec sciezki
+            break
 
-        # Zaladuj aktualna koperte
-        latest = get_latest_checkpoint(run_id, ws)
-        envelope = latest[1] if latest else create_envelope(
-            run_id, manifest.zamiar, manifest.sciezka
-        )
+        latest = get_latest_checkpoint(run_id, ws, cid)
+        envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
 
         try:
             output, _ = auto_pilot.execute_station_with_llm(run_id, station, envelope)
@@ -1155,7 +1219,6 @@ def auto_pilot_start(
             final_status = "zablokowany"
             break
 
-        # Brak bloku KOPERTA w wyjsciu LLM -> zatrzymaj (por. docs/07 krok 5)
         if set(output.keys()) == {"_raw_output"}:
             blad = f"{station}: LLM nie zwrocil bloku KOPERTA (blad parsowania)"
             bledy.append(blad)
@@ -1164,7 +1227,7 @@ def auto_pilot_start(
             break
 
         exec_result = execute_station(
-            run_id, station, output, skip_validation=True, workspace=workspace
+            run_id, station, output, skip_validation=True, workspace=workspace, client_id=cid
         )
         executed.append(station)
         auto_pilot.update_auto_pilot_state(run_id, station, "zakonczona")
@@ -1173,23 +1236,16 @@ def auto_pilot_start(
             final_status = "zatrzymany"
             break
 
-        # Bramka jakosci po stacji sprawdzenie
         if station == "sprawdzenie":
             audit_status = str(output.get("status_audytu", "niezgodny"))
             gate = quality_gate(
-                run_id, audit_status, output.get("wymiary") or {}, "", workspace
+                run_id, audit_status, output.get("wymiary") or {}, "", workspace, cid
             )
             if gate["gate_decision"] == "eskalacja":
                 final_status = "zablokowany"
                 bledy.append("Bramka jakosci: eskalacja po max iteracjach")
-                auto_pilot.update_auto_pilot_state(
-                    run_id, station, "zablokowany", "eskalacja bramki"
-                )
+                auto_pilot.update_auto_pilot_state(run_id, station, "zablokowany", "eskalacja bramki")
                 break
-            if gate["gate_decision"] == "powrot":
-                # U5: polegamy wylacznie na quality_gate eskalacji -
-                # quality_gate zarzadza iteracja_bramki w manifeście
-                pass
             station = gate["next_station"]
         else:
             station = exec_result["next_station"]
@@ -1207,17 +1263,18 @@ def auto_pilot_start(
         "status": final_status,
         "stacje_wykonane": executed,
         "bledy": bledy,
-        "iteracja_bramki": load_manifest(config.manifest_path(run_id, ws)).iteracja_bramki,
+        "iteracja_bramki": load_manifest(config.manifest_path(run_id, ws, cid)).iteracja_bramki,
     }
 
 
 @mcp.tool
-def auto_pilot_status(run_id: str, workspace: str = "") -> dict[str, Any]:
+def auto_pilot_status(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Zwraca status wykonania auto-pilota.
 
     Args:
         run_id: Identyfikator run'u
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Status auto-pilota z lista wykonanych i pozostalych stacji
@@ -1227,12 +1284,13 @@ def auto_pilot_status(run_id: str, workspace: str = "") -> dict[str, Any]:
 
 
 @mcp.tool
-def auto_pilot_stop(run_id: str, workspace: str = "") -> dict[str, Any]:
+def auto_pilot_stop(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, Any]:
     """Zatrzymuje auto-pilot. Zapisuje stan, pozwala na reczna kontynuacje.
 
     Args:
         run_id: Identyfikator run'u
         workspace: Sciezka do workspace'a (opcjonalna). Jesli puste, uzywa cwd.
+        client_id: Identyfikator klienta (opcjonalny).
 
     Returns:
         Status zatrzymania
@@ -1263,6 +1321,398 @@ def verify_integrity() -> dict[str, Any]:
 
 
 # =====================================================================
+# 7. ZARZADZANIE KLIENTAMI (multi-tenant)
+# =====================================================================
+
+
+@mcp.tool
+def register_client(
+    client_id: str,
+    display_name: str,
+    aliases: list[str] | None = None,
+    external_ids: dict[str, str] | None = None,
+    id_fragments: list[str] | None = None,
+    metadata: dict[str, Any] | None = None,
+    workspace: str = "",
+) -> dict[str, Any]:
+    """Rejestruje nowego klienta z aliasami i identyfikatorami zewnetrznymi.
+
+    Args:
+        client_id: Kanoniczny identyfikator (slug [a-z0-9-]+)
+        display_name: Nazwa wyswietlana
+        aliases: Alternatywne nazwy (przypadki, skroty, literowki)
+        external_ids: Identyfikatory zewnetrzne {"nip": "...", "phone": "...", "krs": "..."}
+        id_fragments: Fragmenty ID do dopasowania (np. ostatnie 4 cyfry NIP)
+        metadata: Dodatkowe metadane (branza, osoba kontaktowa)
+        workspace: Sciezka do workspace'a (opcjonalna)
+    """
+    ws = _ws(workspace)
+    context = client_registry.register_client(
+        client_id=client_id,
+        display_name=display_name,
+        aliases=aliases,
+        external_ids=external_ids,
+        id_fragments=id_fragments,
+        metadata=metadata,
+        workspace=ws,
+    )
+    return context.model_dump()
+
+
+@mcp.tool
+def resolve_client(query: str, workspace: str = "") -> dict[str, Any]:
+    """Rozpoznaje klienta na podstawie niejednoznacznego identyfikatora.
+
+    Przeszukuje rejestr klientow: client_id, aliasy, identyfikatory zewnetrzne
+    (NIP, telefon, KRS), fragmenty identyfikatorow. Zwraca kandydatow z
+    poziomem pewnosci.
+
+    Przy 100% pewnosci auto-przypisuje. Ponizej 100% zwraca needs_confirmation=true
+    i agent powinien zapytac uzytkownika o potwierdzenie.
+
+    Args:
+        query: Identyfikator klienta (nazwa, alias, NIP, telefon, fragment)
+        workspace: Sciezka do workspace'a (opcjonalna)
+    """
+    ws = _ws(workspace)
+    result = client_registry.resolve_client(query, ws)
+    return result.model_dump()
+
+
+@mcp.tool
+def set_active_client(client_id: str, workspace: str = "") -> dict[str, Any]:
+    """Ustawia aktywnego klienta dla biezacej sesji MCP.
+
+    Wszystkie kolejne operacje pipeline beda izolowane per ten klient,
+    chyba ze jawnie nadpiszesz parametrem client_id w konkretnym narzedziu.
+
+    Args:
+        client_id: Kanoniczny identyfikator klienta (z resolve_client lub register_client)
+        workspace: Sciezka do workspace'a (opcjonalna)
+    """
+    global _active_client_id
+    ws = _ws(workspace)
+    client_registry.validate_client_id(client_id)
+
+    # Sprawdz czy klient istnieje
+    context = client_registry.load_client(client_id, ws)
+    if context is None:
+        from .models import ClientNotFoundError
+        raise ClientNotFoundError(f"Klient '{client_id}' nie istnieje. Uzyj register_client aby go utworzyc.")
+
+    _active_client_id = client_id
+    return {
+        "client_id": client_id,
+        "display_name": context.display_name,
+        "status": "aktywny",
+    }
+
+
+@mcp.tool
+def get_active_client() -> dict[str, Any]:
+    """Zwraca aktualnie aktywnego klienta sesji MCP."""
+    return {
+        "client_id": _active_client_id,
+        "is_set": bool(_active_client_id),
+    }
+
+
+@mcp.tool
+def get_client_info(client_id: str, workspace: str = "") -> dict[str, Any]:
+    """Zwraca metadane klienta."""
+    ws = _ws(workspace)
+    context = client_registry.load_client(client_id, ws)
+    if context is None:
+        from .models import ClientNotFoundError
+        raise ClientNotFoundError(f"Klient '{client_id}' nie istnieje.")
+    return context.model_dump()
+
+
+@mcp.tool
+def list_clients(workspace: str = "") -> list[dict[str, Any]]:
+    """Lista zarejestrowanych klientow w workspace."""
+    ws = _ws(workspace)
+    clients = client_registry.load_all_clients(ws)
+    return [
+        {
+            "client_id": c.client_id,
+            "display_name": c.display_name,
+            "status": c.status,
+            "aliases_count": len(c.aliases),
+            "external_ids_count": len(c.external_ids),
+        }
+        for c in clients
+    ]
+
+
+@mcp.tool
+def update_client(
+    client_id: str,
+    updates: dict[str, Any],
+    workspace: str = "",
+) -> dict[str, Any]:
+    """Aktualizuje aliasy, external_ids, id_fragments, metadane klienta."""
+    ws = _ws(workspace)
+    context = client_registry.update_client(client_id, updates, ws)
+    return context.model_dump()
+
+
+@mcp.tool
+def archive_client(client_id: str, workspace: str = "") -> dict[str, Any]:
+    """Archiwizuje klienta (zmiana statusu na zarchiwizowany)."""
+    ws = _ws(workspace)
+    context = client_registry.archive_client(client_id, ws)
+    return context.model_dump()
+
+
+@mcp.tool
+def delete_client(client_id: str, workspace: str = "") -> dict[str, Any]:
+    """Usuwa klienta i wszystkie jego dane (GDPR right to be forgotten).
+
+    Usuwa: context.yaml, pipeline-runs/, rag/, memory/.
+    """
+    ws = _ws(workspace)
+    result = client_registry.delete_client(client_id, ws)
+    # Wyczysc aktywnego klienta jesli to byl on
+    global _active_client_id
+    if _active_client_id == client_id:
+        _active_client_id = ""
+    return result
+
+
+# =====================================================================
+# 8. WIEDZA WSPOLDZIELONA (cross-client)
+# =====================================================================
+
+
+@mcp.tool
+def save_shared_knowledge(
+    knowledge_id: str,
+    category: str,
+    title: str,
+    content: str,
+    source: str = "",
+    tags: list[str] | None = None,
+    workspace: str = "",
+) -> dict[str, Any]:
+    """Zapisuje wpis wiedzy wspoldzielonej (cross-client).
+
+    Args:
+        knowledge_id: Identyfikator wpisu (slug)
+        category: Kategoria ("decision", "pattern", "pitfall")
+        title: Tytul
+        content: Tresc
+        source: Zrodlo wiedzy
+        tags: Tagi
+        workspace: Sciezka do workspace'a (opcjonalna)
+    """
+    ws = _ws(workspace)
+    entry = knowledge.save_shared_knowledge(
+        knowledge_id=knowledge_id,
+        category=category,
+        title=title,
+        content=content,
+        source=source,
+        tags=tags,
+        workspace=ws,
+    )
+    return entry.model_dump()
+
+
+@mcp.tool
+def get_shared_knowledge(
+    knowledge_id: str, category: str, workspace: str = ""
+) -> dict[str, Any]:
+    """Odczytuje wpis wiedzy wspoldzielonej."""
+    ws = _ws(workspace)
+    entry = knowledge.get_shared_knowledge(knowledge_id, category, ws)
+    if entry is None:
+        raise PipelineError(f"Wiedza '{knowledge_id}' w kategorii '{category}' nie istnieje.")
+    return entry.model_dump()
+
+
+@mcp.tool
+def search_shared_knowledge(
+    query: str, category: str = "", workspace: str = ""
+) -> list[dict[str, Any]]:
+    """Wyszukuje w wiedzy wspoldzielonej."""
+    ws = _ws(workspace)
+    return knowledge.search_shared_knowledge(query, category, ws)
+
+
+@mcp.tool
+def list_shared_knowledge(
+    category: str = "", workspace: str = ""
+) -> list[dict[str, Any]]:
+    """Lista wszystkich wpisow wiedzy wspoldzielonej."""
+    ws = _ws(workspace)
+    return knowledge.list_shared_knowledge(category, ws)
+
+
+# =====================================================================
+# 9. PAMIEC AI per-klient
+# =====================================================================
+
+
+@mcp.tool
+def save_client_memory(
+    topic: str,
+    content: str,
+    client_id: str = "",
+    memory_id: str = "",
+    tags: list[str] | None = None,
+    workspace: str = "",
+) -> dict[str, Any]:
+    """Zapisuje wpis pamieci AI per-klient.
+
+    Args:
+        topic: Temat wpisu
+        content: Tresc pamieci
+        client_id: Identyfikator klienta (opcjonalny, uzywa aktywnego jesli pusty)
+        memory_id: Identyfikator wpisu (opcjonalny, auto-generowany)
+        tags: Tagi
+        workspace: Sciezka do workspace'a (opcjonalna)
+    """
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    if not cid:
+        raise PipelineError("client_id jest wymagany dla pamieci per-klient. Uzyj set_active_client lub podaj client_id.")
+    entry = client_memory.save_client_memory(
+        topic=topic, content=content, client_id=cid,
+        memory_id=memory_id, tags=tags, workspace=ws,
+    )
+    return entry.model_dump()
+
+
+@mcp.tool
+def get_client_memory(
+    memory_id: str, client_id: str = "", workspace: str = ""
+) -> dict[str, Any]:
+    """Odczytuje wpis pamieci per-klient."""
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    if not cid:
+        raise PipelineError("client_id jest wymagany.")
+    entry = client_memory.get_client_memory(memory_id, cid, ws)
+    if entry is None:
+        raise PipelineError(f"Pamiec '{memory_id}' nie istnieje dla klienta '{cid}'.")
+    return entry.model_dump()
+
+
+@mcp.tool
+def list_client_memories(
+    client_id: str = "", workspace: str = ""
+) -> list[dict[str, Any]]:
+    """Lista wpisow pamieci per-klient."""
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    if not cid:
+        raise PipelineError("client_id jest wymagany.")
+    return client_memory.list_client_memories(cid, ws)
+
+
+@mcp.tool
+def save_shared_memory(
+    topic: str,
+    content: str,
+    memory_id: str = "",
+    tags: list[str] | None = None,
+    workspace: str = "",
+) -> dict[str, Any]:
+    """Zapisuje wpis pamieci AI wspoldzielonej (cross-client)."""
+    ws = _ws(workspace)
+    entry = client_memory.save_shared_memory(
+        topic=topic, content=content, memory_id=memory_id, tags=tags, workspace=ws,
+    )
+    return entry.model_dump()
+
+
+@mcp.tool
+def get_shared_memory(
+    memory_id: str, workspace: str = ""
+) -> dict[str, Any]:
+    """Odczytuje wpis pamieci wspoldzielonej."""
+    ws = _ws(workspace)
+    entry = client_memory.get_shared_memory(memory_id, ws)
+    if entry is None:
+        raise PipelineError(f"Pamiec wspoldzielona '{memory_id}' nie istnieje.")
+    return entry.model_dump()
+
+
+@mcp.tool
+def search_client_memories(
+    query: str, client_id: str = "", include_shared: bool = True, workspace: str = ""
+) -> list[dict[str, Any]]:
+    """Wyszukuje w pamieci per-klient (i opcjonalnie wspoldzielonej)."""
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    if not cid:
+        raise PipelineError("client_id jest wymagany.")
+    return client_memory.search_client_memories(query, cid, include_shared, ws)
+
+
+# =====================================================================
+# 10. RAG per-klient
+# =====================================================================
+
+
+@mcp.tool
+def index_client_document(
+    doc_id: str,
+    content: str,
+    title: str = "",
+    metadata: dict[str, Any] | None = None,
+    client_id: str = "",
+    workspace: str = "",
+) -> dict[str, Any]:
+    """Indeksuje dokument w RAG per-klient (lub wspoldzielonym gdy client_id puste).
+
+    Args:
+        doc_id: Identyfikator dokumentu
+        content: Tresc dokumentu
+        title: Tytul dokumentu
+        metadata: Metadane dokumentu
+        client_id: Identyfikator klienta (opcjonalny). Pusty = RAG wspoldzielony.
+        workspace: Sciezka do workspace'a (opcjonalna)
+    """
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    return rag.index_client_document(
+        doc_id=doc_id, content=content, title=title,
+        metadata=metadata, client_id=cid, workspace=ws,
+    )
+
+
+@mcp.tool
+def search_client_rag(
+    query: str, client_id: str = "", limit: int = 10, workspace: str = ""
+) -> list[dict[str, Any]]:
+    """Wyszukuje w RAG per-klient (i wspoldzielonym)."""
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    return rag.search_client_rag(query, cid, limit, workspace)
+
+
+@mcp.tool
+def search_shared_rag(
+    query: str, limit: int = 10, workspace: str = ""
+) -> list[dict[str, Any]]:
+    """Wyszukuje wylacznie we wspoldzielonym RAG."""
+    ws = _ws(workspace)
+    return rag.search_shared_rag(query, limit, workspace)
+
+
+@mcp.tool
+def list_rag_documents(
+    client_id: str = "", workspace: str = ""
+) -> list[dict[str, Any]]:
+    """Lista dokumentow w RAG per-klient (lub wspoldzielonym)."""
+    ws = _ws(workspace)
+    cid = _resolve_client_id(client_id)
+    return rag.list_rag_documents(cid, workspace)
+
+
+# =====================================================================
 # PROMPTS - auto-inicjalizacja pipeline'u
 # =====================================================================
 
@@ -1272,41 +1722,45 @@ async def pipeline_start(
     zamiar: str,
     kontekst: str = "",
     workspace: str = "",
+    client_id: str = "",
 ) -> list[Message]:
     """Auto-start pipeline'u. Wywoluje start_run i zwraca instrukcje do pierwszej stacji.
-
-    Uzyj tego promptu na poczatku kazdego zadania, ktore wymaga ustrukturyzowanej pracy
-    przez pipeline. Prompt automatycznie tworzy run i zwraca instrukcje do stacji inicjuj.
 
     Args:
         zamiar: Cel zadania od uzytkownika (wymagany)
         kontekst: Dodatkowy kontekst zadania (opcjonalny)
         workspace: Sciezka do workspace'a (opcjonalna, domyslnie cwd)
+        client_id: Identyfikator klienta (opcjonalny, domyslnie aktywny klient sesji)
     """
     result = await mcp.call_tool("start_run", {
         "zamiar": zamiar,
         "kontekst": kontekst,
         "workspace": workspace,
+        "client_id": client_id,
     })
     data = result.structured_content or {}
     run_id = data.get("run_id", "")
     manifest_path = data.get("manifest_path", "")
+    resolved_cid = data.get("client_id", "")
 
     contract_result = await mcp.call_tool("get_station_contract", {
         "run_id": run_id,
         "station": "inicjuj",
         "workspace": workspace,
+        "client_id": client_id,
     })
     contract = contract_result.structured_content or {}
     skill_prompt = contract.get("skill_prompt", "")
     required_input = contract.get("required_input", [])
     output_fields = contract.get("output", [])
 
+    client_info = f"\nKlient: {resolved_cid}" if resolved_cid else "\nTryb: legacy (bez izolacji klienta)"
+
     return [
         Message(
             f"Pipeline uruchomiony automatycznie.\n"
             f"Run ID: {run_id}\n"
-            f"Manifest: {manifest_path}\n\n"
+            f"Manifest: {manifest_path}{client_info}\n\n"
             f"Przystapujesz do stacji: inicjuj (Inicjacja)\n\n"
             f"Wymagane wejscie: {required_input}\n"
             f"Oczekiwane wyjscie: {output_fields}\n\n"
@@ -1327,18 +1781,19 @@ async def pipeline_start(
 async def pipeline_continue(
     run_id: str,
     workspace: str = "",
+    client_id: str = "",
 ) -> list[Message]:
-    """Wznawia istniejacy run pipeline'u. Zwraca instrukcje do nastepnej stacji.
-
-    Uzyj tego promptu gdy uzytkownik chce wznowic przerwana prace nad run'em.
+    """Wznawia istniejacy run pipeline'u.
 
     Args:
         run_id: Identyfikator run'u do wznowienia
         workspace: Sciezka do workspace'a (opcjonalna, domyslnie cwd)
+        client_id: Identyfikator klienta (opcjonalny)
     """
     result = await mcp.call_tool("resume_run", {
         "run_id": run_id,
         "workspace": workspace,
+        "client_id": client_id,
     })
     data = result.structured_content or {}
     stacja_wznowienia = data.get("stacja_wznowienia", "")
@@ -1353,6 +1808,7 @@ async def pipeline_continue(
             "run_id": run_id,
             "station": stacja_wznowienia,
             "workspace": workspace,
+            "client_id": client_id,
         })
         contract = contract_result.structured_content or {}
         skill_prompt = contract.get("skill_prompt", "")

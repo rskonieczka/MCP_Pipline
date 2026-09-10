@@ -101,9 +101,11 @@ Po dodaniu restart Devina/Windsurf.
 
 | Zmienna | Wartosc domyslna | Opis |
 |---|---|---|
-| `PIPELINE_RUNS_DIR` | `./.ai-kb/pipeline-runs` | Katalog persystencji run'ow |
+| `PIPELINE_RUNS_DIR` | `./.ai-kb/pipeline-runs` | Katalog persystencji run'ow (tryb legacy) |
+| `PIPELINE_WORKSPACE` | autodetekcja z `__file__` | Sciezka do workspace'a (nadpisuje autodetekcje) |
 | `PIPELINE_AUTO_PILOT` | `false` | Czy auto-pilot domyslnie wlaczony |
 | `PIPELINE_LOG_LEVEL` | `INFO` | Poziom logowania (`DEBUG` \| `INFO` \| `WARNING` \| `ERROR`) |
+| `PIPELINE_DEFAULT_CLIENT_ID` | `""` | Domyślny klient gdy brak jawnego `client_id` i aktywnego klienta sesji (`""` = tryb legacy) |
 
 ### 4.2. LLM (auto-pilot)
 

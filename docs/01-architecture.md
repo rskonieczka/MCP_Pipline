@@ -53,6 +53,10 @@ src/pipeline_mcp/
   llm.py                 # Abstrakcja dostawcy LLM (OpenAI, Anthropic, lokalny)
   skills_loader.py       # Ladowanie wbudowanych skilli z pakietu (src/pipeline_mcp/skills/)
   rtm.py                 # Requirements Traceability Matrix - sledzenie wymagan
+  client_registry.py     # Rejestr klientow (multi-tenant): CRUD, dopasowanie L1-L6
+  client_memory.py       # Pamiec AI per-klient i wspoldzielona
+  knowledge.py           # Wiedza wspoldzielona (decisions, patterns, pitfalls)
+  rag.py                 # RAG per-klient i wspoldzielony (indeks keyword-based)
   skills/                # Wbudowane skille stacji (self-contained)
     inicjuj-run/SKILL.md
     zmienne/SKILL.md
@@ -155,14 +159,17 @@ Walidacja kontraktow miedzy stacjami na podstawie mapowania pole-po-polu z `kont
 
 ### 3.9. memgraph.py
 
-Integracja z Memgraph przez sterownik bolt:
+Integracja z Memgraph przez sterownik bolt. Node IDs zawieraja `client_id` dla izolacji wieloklientowej (legacy gdy puste):
 
-- `write_run_node(run_id, zamiar)` - wezel Run
-- `write_station_node(run_id, station, status)` - wezel Stacja
+- `write_run_node(run_id, zamiar, sciezka, client_id)` - wezel Run (`run:<client_id>:<run_id>`)
+- `write_station_node(run_id, station, status, checkpoint, client_id)` - wezel Stacja (`stacja:<client_id>:<run_id>:<station>`)
 - `write_relation(source, target, rel_type, fields)` - krawedzie
-- `write_rtm_nodes(run_id, envelope)` - wezly Wymaganie i relacje ADRESUJE/WERYFIKUJE
-- `validate_graph_continuity(run_id)` - walidacja ciaglosci grafu
-- `audit_run_graph(run_id)` - zapytania audytowe (osierocone wezly, brakujace krawedzie)
+- `write_rtm_nodes(run_id, envelope)` - wezly Wymaganie i relacje ADRESUJE/WERYFIKUJE (`wymaganie:<client_id>:<run_id>:<req_id>`)
+- `close_run_node(run_id, timestamp_end, client_id)` - zamkniecie wezla Run
+- `validate_graph_continuity(run_id, client_id)` - walidacja ciaglosci grafu (filtr po client_id)
+- `write_shared_knowledge_node(knowledge_id, category, title, content)` - wezel Wiedza (`wiedza:<knowledge_id>`, client_id="shared")
+- `write_client_memory_node(memory_id, client_id, topic, content, scope)` - wezel Pamiec (`pamiec:<client_id>:<memory_id>`)
+- `delete_client_nodes(client_id)` - usuniecie wezlow klienta z Memgraph (GDPR)
 
 ### 3.10. auto_pilot.py
 
@@ -210,6 +217,48 @@ Requirements Traceability Matrix - sledzenie wymagan uzytkownika przez caly pipe
 Statusy wymagan: `nieadresowane` -> `adresowane` -> `zrealizowane` -> `weryfikowane` / `niespelnione`.
 
 Integracja z Memgraph: wezly `:Wymaganie`, relacje `:ADRESUJE` (Stacja -> Wymaganie), `:WERYFIKUJE` (Stacja -> Wymaganie). Zapis przez `write_rtm_nodes` w `memgraph.py`.
+
+### 3.14. client_registry.py
+
+Rejestr klientow (multi-tenant). Zarzadza kontekstem klienta w `<workspace>/.ai-kb/clients/<client_id>/context.yaml`.
+
+- `register_client(client_id, display_name, ...)` - rejestracja nowego klienta
+- `load_client(client_id, workspace)` - odczyt kontekstu (None gdy nie istnieje)
+- `update_client(client_id, updates, ...)` - aktualizacja metadanych, aliasow, NIP
+- `archive_client(client_id, ...)` / `unarchive_client(...)` - archiwizacja/reaktywacja
+- `delete_client(client_id, ...)` - usuniecie plikow + wezlow Memgraph (GDPR)
+- `resolve_client(query, ...)` - dopasowanie 6-warstwowe (L1-L6: client_id, external_id, alias, id_fragment, fuzzy_name, brak)
+
+Walidacja `client_id`: regex `^[a-z0-9][a-z0-9-]*[a-z0-9]$` (ochrona przed path traversal). Zapisy atomowe (`tempfile` + `os.replace`).
+
+### 3.15. client_memory.py
+
+Pamiec AI per-klient i wspoldzielona. Zapis w formacie YAML.
+
+- `save_client_memory(topic, content, client_id, tags, memory_id)` - pamiec per-klient
+- `save_shared_memory(topic, content, tags, memory_id)` - pamiec wspoldzielona
+- `get_client_memory(memory_id, client_id)` / `list_client_memories(client_id)` / `search_client_memories(query, client_id, include_shared)`
+
+Auto-generowany `memory_id` jest unikalny przy kolizji tematu (dodatek timestamp). Jawny `memory_id` zachowuje semantyke upsert. Zapisy atomowe. Integracja z Memgraph przez `write_client_memory_node`.
+
+### 3.16. knowledge.py
+
+Wiedza wspoldzielona (cross-client) w 3 kategoriach: `decisions`, `patterns`, `pitfalls`.
+
+- `save_shared_knowledge(category, title, content, knowledge_id)` - zapis wezla wiedzy
+- `get_shared_knowledge(knowledge_id)` / `search_shared_knowledge(query, category)` / `list_shared_knowledge(category)`
+
+Sanityzacja `knowledge_id` (slug). Zapisy atomowe. Integracja z Memgraph przez `write_shared_knowledge_node` (client_id="shared").
+
+### 3.17. rag.py
+
+RAG (Retrieval-Augmented Generation) per-klient i wspoldzielony. Indeks keyword-based w formacie YAML.
+
+- `index_client_document(doc_id, content, client_id, metadata)` - indeksowanie dokumentu per-klient
+- `search_client_rag(query, client_id, include_shared, limit)` - przeszukiwanie RAG klienta + wspoldzielonego
+- `list_rag_documents(client_id)` - lista zaindeksowanych dokumentow
+
+Blokady per-sciezka-indeksu (`weakref.WeakValueDictionary`) chronia przed lost update w rownoleglym indeksowaniu. Atomowy zapis indeksu (`tempfile.mkstemp` + `os.replace`).
 
 ## 4. Przeplyw danych
 
@@ -267,25 +316,49 @@ Integracja z Memgraph: wezly `:Wymaganie`, relacje `:ADRESUJE` (Stacja -> Wymaga
 
 ## 5. Struktura persystencji
 
+### 5.1. Tryb legacy (brak client_id)
+
 ```
 .ai-kb/pipeline-runs/
   <run_id>/
-    manifest.yaml              # indeks stacji, statusy, sciezka, iteracja bramki
-    stan_inicjuj.yaml       # checkpoint po inicjuj
-    stan_zmienne.yaml       # checkpoint po zmienne
-    stan_analiza.yaml
-    stan_dekompozycja.yaml  # tylko sciezka doglebny
-    stan_dobierz.yaml
-    stan_dobierz_iter1.yaml # checkpoint po 1. iteracji bramki
-    stan_routing.yaml       # tylko sciezka doglebny
-    stan_planuj.yaml
-    stan_realizuj.yaml
-    stan_weryfikacja.yaml
-    stan_sprawdzenie.yaml
-    stan_10_ewaluacja.yaml     # tylko sciezka doglebny
-    stan_11_utrwal.yaml
-    stan_12_monitoruj.yaml     # tylko sciezka doglebny
-    envelope_final.yaml        # ostateczna koperta po zamknieciu
+    manifest.yaml
+    stan_inicjuj.yaml
+    ...
+    envelope_final.yaml
+```
+
+### 5.2. Tryb wieloklientowy (z client_id)
+
+```
+.ai-kb/
+  clients/
+    <client_id>/
+      context.yaml              # metadane klienta, aliasy, NIP, status
+      pipeline-runs/
+        <run_id>/
+          manifest.yaml
+          stan_inicjuj.yaml
+          ...
+          envelope_final.yaml
+      memory/
+        <memory_id>.yaml        # pamiec AI per-klient
+      rag/
+        index.yaml              # indeks keyword-based
+        documents/
+          <doc_id>.yaml         # zaindeksowane dokumenty
+  shared-knowledge/
+    memory/
+      <memory_id>.yaml          # pamiec wspoldzielona
+    rag/
+      index.yaml
+      documents/
+        <doc_id>.yaml
+    decisions/
+      <knowledge_id>.yaml       # decyzje architektoniczne
+    patterns/
+      <knowledge_id>.yaml       # wzorce projektowe
+    pitfalls/
+      <knowledge_id>.yaml       # pulapki i leki
 ```
 
 Szczegoly: `docs/06-checkpointing.md`.

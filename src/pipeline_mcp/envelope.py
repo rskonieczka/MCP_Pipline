@@ -7,17 +7,20 @@ from typing import Any
 from .models import Envelope, Relacja, Stan, Walidacja
 
 
-def create_envelope(run_id: str, zamiar: str, sciezka: str = "pelny") -> Envelope:
+def create_envelope(
+    run_id: str, zamiar: str, sciezka: str = "pelny", client_id: str = ""
+) -> Envelope:
     """Tworzy inicjalna koperte po start_run."""
     return Envelope(
         run_id=run_id,
         sciezka=sciezka,  # type: ignore
         stacja_aktualna="",
         stacja_poprzednia=None,
-        stan=Stan(zamiar=zamiar),
+        stan=Stan(zamiar=zamiar, client_id=client_id),
         pola_stacji={},
         walidacja=Walidacja(),
         relacje=[],
+        client_id=client_id,
         timestamp=datetime.now().isoformat(),
     )
 
@@ -46,13 +49,16 @@ def add_station_relations(
 ) -> Envelope:
     """Dodaje relacje standardowe dla stacji (nastapila_po, zawiera).
 
-    Wezly stacji uzywaja konwencji id='stacja:<run_id>:<name>' (per run),
-    spojnej z memgraph.write_station_node.
+    Wezly stacji uzywaja konwencji id z memgraph._station_node_id / _run_node_id
+    (z client_id dla izolacji wieloklientowej, bez dla legacy).
     """
+    from .memgraph import _run_node_id, _station_node_id
+
+    cid = envelope.client_id
     # Relacja: run -> stacja (zawiera) - deduplikacja
     zawiera = Relacja(
-        zrodlo=f"run:{run_id}",
-        cel=f"stacja:{run_id}:{station}",
+        zrodlo=_run_node_id(run_id, cid),
+        cel=_station_node_id(run_id, station, cid),
         typ="zawiera",
     )
     if zawiera not in envelope.relacje:
@@ -62,8 +68,8 @@ def add_station_relations(
     # Kierunek: aktualna stacja wskazuje na swoją poprzednią
     if envelope.stacja_poprzednia:
         nastapila = Relacja(
-            zrodlo=f"stacja:{run_id}:{station}",
-            cel=f"stacja:{run_id}:{envelope.stacja_poprzednia}",
+            zrodlo=_station_node_id(run_id, station, cid),
+            cel=_station_node_id(run_id, envelope.stacja_poprzednia, cid),
             typ="nastapila_po",
         )
         if nastapila not in envelope.relacje:
@@ -118,4 +124,5 @@ def get_envelope_summary(envelope: Envelope) -> dict[str, Any]:
         "relacje_count": len(envelope.relacje),
         "rtm_count": len(envelope.rtm),
         "walidacja_status": envelope.walidacja.status,
+        "client_id": envelope.client_id,
     }

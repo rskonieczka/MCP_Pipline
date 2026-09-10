@@ -9,7 +9,9 @@ import yaml
 from .models import Manifest, StacjaManifest, StationStatus
 
 
-def create_manifest(run_id: str, zamiar: str, sciezka: str = "pelny") -> Manifest:
+def create_manifest(
+    run_id: str, zamiar: str, sciezka: str = "pelny", client_id: str = ""
+) -> Manifest:
     """Tworzy nowy manifest run'u."""
     return Manifest(
         run_id=run_id,
@@ -19,6 +21,7 @@ def create_manifest(run_id: str, zamiar: str, sciezka: str = "pelny") -> Manifes
         status_runu="w_trakcie",
         timestamp_start=datetime.now().isoformat(),
         stacje=[],
+        client_id=client_id,
     )
 
 

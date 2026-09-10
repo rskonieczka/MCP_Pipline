@@ -18,6 +18,7 @@ ValidationStatus = Literal["gotowy", "wnioskowane", "niekompletne"]
 SourceType = Literal[
     "user_provided", "verified_source", "agent_inference", "hypothesis", "unavailable"
 ]
+ClientStatus = Literal["aktywny", "zarchiwizowany"]
 
 
 # --- Podstawowe struktury ---
@@ -49,6 +50,7 @@ class Stan(BaseModel):
     zamiar: str = ""
     klasyfikacja: str = ""
     punkt_wejscia: str = ""
+    client_id: str = ""
 
 
 RTMStatus = Literal[
@@ -87,6 +89,8 @@ class Envelope(BaseModel):
     # U8: wejscie uzytkownika z start_run (kontekst, zrodla, tryb_inicjacji) -
     # nie w pola_stacji, bo _wejscie nie jest nazwa stacji
     wejscie: dict[str, Any] = Field(default_factory=dict)
+    # MT: identyfikator klienta dla izolacji wieloklientowej (pusty = tryb legacy)
+    client_id: str = ""
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -125,6 +129,8 @@ class Manifest(BaseModel):
     stacje: list[StacjaManifest] = Field(default_factory=list)
     # U4: historia iteracji bramki (pusta przy starcie, aktualizowana przez evaluate_gate)
     historia_bramki: list[GateHistoryEntry] = Field(default_factory=list)
+    # MT: identyfikator klienta dla izolacji wieloklientowej (pusty = tryb legacy)
+    client_id: str = ""
 
 
 # --- Run ---
@@ -140,6 +146,8 @@ class Run(BaseModel):
     status: RunStatus = "w_trakcie"
     manifest: Manifest | None = None
     envelope: Envelope | None = None
+    # MT: identyfikator klienta dla izolacji wieloklientowej (pusty = tryb legacy)
+    client_id: str = ""
 
 
 # --- Wyniki narzedzi ---
@@ -214,6 +222,66 @@ class AutoPilotStatus(BaseModel):
     laczny_koszt: dict[str, Any] | None = None
 
 
+# --- Klient (multi-tenant) ---
+
+
+class ClientContext(BaseModel):
+    """Kontekst zarejestrowanego klienta w systemie wieloklientowym."""
+
+    client_id: str
+    display_name: str
+    status: ClientStatus = "aktywny"
+    registered: str = Field(default_factory=lambda: datetime.now().isoformat())
+    aliases: list[str] = Field(default_factory=list)
+    external_ids: dict[str, str] = Field(default_factory=dict)
+    id_fragments: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ClientMatch(BaseModel):
+    """Pojedyncze dopasowanie klienta z algorytmu resolve_client."""
+
+    client_id: str
+    display_name: str
+    confidence: int  # 0-100
+    matched_on: str  # "client_id", "external_id:nip", "alias", "id_fragment", "fuzzy_name"
+
+
+class ResolveResult(BaseModel):
+    """Wynik rozpoznawania klienta z niejednoznacznego identyfikatora."""
+
+    query: str
+    normalized: str
+    matches: list[ClientMatch] = Field(default_factory=list)
+    auto_resolved: bool = False
+    needs_confirmation: bool = False
+    suggested_action: str = ""
+
+
+class ClientMemoryEntry(BaseModel):
+    """Wpis pamieci AI per-klient."""
+
+    memory_id: str
+    topic: str
+    content: str
+    scope: Literal["client", "shared"] = "client"
+    client_id: str = ""
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    tags: list[str] = Field(default_factory=list)
+
+
+class SharedKnowledgeEntry(BaseModel):
+    """Wpis wiedzy wspoldzielonej (cross-client)."""
+
+    knowledge_id: str
+    category: Literal["decision", "pattern", "pitfall"]
+    title: str
+    content: str
+    source: str = ""
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    tags: list[str] = Field(default_factory=list)
+
+
 # --- Wyjatki ---
 
 
@@ -269,3 +337,19 @@ class SkillNotFoundError(PipelineError):
 
 class LLMOutputParseError(PipelineError):
     code = "LLM_OUTPUT_PARSE_ERROR"
+
+
+class ClientNotFoundError(PipelineError):
+    code = "CLIENT_NOT_FOUND"
+
+
+class ClientAlreadyExistsError(PipelineError):
+    code = "CLIENT_ALREADY_EXISTS"
+
+
+class AmbiguousClientError(PipelineError):
+    code = "AMBIGUOUS_CLIENT"
+
+
+class ClientIdMismatchError(PipelineError):
+    code = "CLIENT_ID_MISMATCH"

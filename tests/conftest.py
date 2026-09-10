@@ -10,16 +10,22 @@ import pytest
 
 @pytest.fixture()
 def isolated_runs(tmp_path, monkeypatch):
-    """Izolowany katalog run'ow + wylaczony Memgraph + swiezy singleton Config."""
+    """Izolowany katalog run'ow + klienci + wylaczony Memgraph + swiezy singleton Config."""
     import pipeline_mcp.config as config_mod
     import pipeline_mcp.memgraph as memgraph_mod
+    import pipeline_mcp.server as server_mod
 
-    monkeypatch.setenv("PIPELINE_RUNS_DIR", str(tmp_path / "runs"))
+    # MT: PIPELINE_WORKSPACE izoluje katalog .ai-kb (klienci, wiedza, RAG, pamiec)
+    monkeypatch.setenv("PIPELINE_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("PIPELINE_RUNS_DIR", str(tmp_path / ".ai-kb" / "pipeline-runs"))
     monkeypatch.setenv("PIPELINE_MEMGRAPH_ENABLED", "0")
     config_mod._config = None
     memgraph_mod._driver = None
     memgraph_mod._driver_checked = False
-    yield tmp_path / "runs"
+    # MT: reset aktywnego klienta miedzy testami
+    server_mod._active_client_id = ""
+    yield tmp_path / ".ai-kb" / "pipeline-runs"
     config_mod._config = None
     memgraph_mod._driver = None
     memgraph_mod._driver_checked = False
+    server_mod._active_client_id = ""

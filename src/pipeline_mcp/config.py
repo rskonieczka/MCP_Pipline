@@ -6,21 +6,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-# Położenie tego pliku - używane do autodetekcji workspace (patrz _detect_workspace).
+# Polozenie tego pliku - uzywane do autodetekcji workspace (patrz _detect_workspace).
 # Dla editable install: <workspace>/src/pipeline_mcp/config.py
 _THIS_FILE = Path(__file__).resolve()
 
 
 def _detect_workspace() -> Path | None:
-    """Wykrywa workspace pakietu z położenia editable-install.
+    """Wykrywa workspace pakietu z polozenia editable-install.
 
     Dla editable install struktura to: <workspace>/src/pipeline_mcp/<plik>.
-    Zwraca <workspace>, jeśli istnieje tam pyproject.toml (potwierdzenie, że to
+    Zwraca <workspace>, jesli istnieje tam pyproject.toml (potwierdzenie, ze to
     katalog projektu). W przeciwnym razie None (instalacja systemowa/site-packages
     - wtedy fallback do os.getcwd()).
 
-    Pozwala to serwerowi MCP działać poprawnie niezależnie od cwd procesu rodzica
-    (Windsurf/Devin), bo workspace jest wnioskowany z położenia kodu pakietu.
+    Pozwala to serwerowi MCP dzialac poprawnie niezaleznie od cwd procesu rodzica
+    (Windsurf/Devin), bo workspace jest wnioskowany z polozenia kodu pakietu.
     """
     if (
         _THIS_FILE.parent.name == "pipeline_mcp"
@@ -72,6 +72,11 @@ class Config:
     )
     log_level: str = field(default_factory=lambda: _env("PIPELINE_LOG_LEVEL", "INFO"))
 
+    # MT: domyslny klient dla sesji bez jawnego client_id (pusty = tryb legacy)
+    default_client_id: str = field(
+        default_factory=lambda: _env("PIPELINE_DEFAULT_CLIENT_ID", "")
+    )
+
     # LLM (auto-pilot)
     llm_provider: str = field(
         default_factory=lambda: _env("PIPELINE_LLM_PROVIDER", "openai")
@@ -89,7 +94,7 @@ class Config:
     llm_system_prompt: str = field(
         default_factory=lambda: _env(
             "PIPELINE_LLM_SYSTEM_PROMPT",
-            "Myśl i odpowiadaj wyłącznie po polsku. Zachowaj profesjonalny, techniczny styl.",
+            "Mysl i odpowiadaj wylacznie po polsku. Zachowaj profesjonalny, techniczny styl.",
         )
     )
 
@@ -110,7 +115,7 @@ class Config:
         """Zwraca katalog run'ow rozwiazany wzgledem workspace.
 
         Jesli PIPELINE_RUNS_DIR jest wzgledna, rozwiazuje ja wzgledem workspace
-        wykrytego z położenia editable-install pakietu (patrz _detect_workspace).
+        wykrytego z polozenia editable-install pakietu (patrz _detect_workspace).
         Jesli autodetekcja zawiedzie (instalacja systemowa), fallback do os.getcwd().
         Jesli absolutna, uzywa jak jest.
         """
@@ -121,50 +126,108 @@ class Config:
             path = base / path
         return path.resolve()
 
-    def runs_dir_for(self, workspace: str | None = None) -> Path:
-        """Zwraca katalog run'ow dla danego workspace'a.
+    def _workspace_base(self, workspace: str | None) -> Path:
+        """Rozwiazuje bazowy katalog workspace."""
+        if workspace is not None:
+            ws_path = Path(workspace).expanduser()
+            if not ws_path.is_absolute():
+                ws_path = Path.cwd() / ws_path
+            return ws_path.resolve()
+        # MT: PIPELINE_WORKSPACE nadpisuje autodetekcje (przydatne dla testow)
+        env_ws = _env("PIPELINE_WORKSPACE")
+        if env_ws:
+            ws_path = Path(env_ws).expanduser()
+            if not ws_path.is_absolute():
+                ws_path = Path.cwd() / ws_path
+            return ws_path.resolve()
+        ws = _detect_workspace()
+        return ws if ws is not None else Path.cwd()
+
+    def runs_dir_for(self, workspace: str | None = None, client_id: str = "") -> Path:
+        """Zwraca katalog run'ow dla danego workspace'a i klienta.
 
         Args:
             workspace: Sciezka do workspace'a (absolutna lub wzgledna).
                        Jesli None, uzywa domyslnego runs_dir.
+            client_id: Identyfikator klienta. Jesli niepusty, zwraca
+                       <workspace>/.ai-kb/clients/<client_id>/pipeline-runs/.
+                       Jesli pusty, zwraca <workspace>/.ai-kb/pipeline-runs/ (legacy).
 
         Returns:
-            Katalog run'ow: <workspace>/.ai-kb/pipeline-runs lub domyslny.
+            Katalog run'ow.
         """
-        if workspace is None:
+        if workspace is None and not client_id:
             return self.runs_dir
 
-        ws_path = Path(workspace).expanduser()
-        if not ws_path.is_absolute():
-            ws_path = Path.cwd() / ws_path
-        ws_path = ws_path.resolve()
+        base = self._workspace_base(workspace)
 
-        # Jesli workspace podany, zawsze uzywa <workspace>/.ai-kb/pipeline-runs
-        return ws_path / ".ai-kb" / "pipeline-runs"
+        if client_id:
+            return base / ".ai-kb" / "clients" / client_id / "pipeline-runs"
 
-    def ensure_runs_dir(self, workspace: str | None = None) -> Path:
+        return base / ".ai-kb" / "pipeline-runs"
+
+    def ensure_runs_dir(self, workspace: str | None = None, client_id: str = "") -> Path:
         """Tworzy katalog persystencji jesli nie istnieje. Zwraca sciezke."""
-        runs_dir = self.runs_dir_for(workspace)
+        runs_dir = self.runs_dir_for(workspace, client_id)
         runs_dir.mkdir(parents=True, exist_ok=True)
         return runs_dir
 
-    def run_dir(self, run_id: str, workspace: str | None = None) -> Path:
+    def run_dir(self, run_id: str, workspace: str | None = None, client_id: str = "") -> Path:
         """Zwraca sciezke katalogu run'u."""
-        return self.runs_dir_for(workspace) / run_id
+        return self.runs_dir_for(workspace, client_id) / run_id
 
-    def manifest_path(self, run_id: str, workspace: str | None = None) -> Path:
+    def manifest_path(self, run_id: str, workspace: str | None = None, client_id: str = "") -> Path:
         """Zwraca sciezke manifestu run'u."""
-        return self.run_dir(run_id, workspace) / "manifest.yaml"
+        return self.run_dir(run_id, workspace, client_id) / "manifest.yaml"
 
     def checkpoint_path(
-        self, run_id: str, station: str, suffix: str = "", workspace: str | None = None
+        self, run_id: str, station: str, suffix: str = "", workspace: str | None = None,
+        client_id: str = "",
     ) -> Path:
         """Zwraca sciezke checkpointu stacji."""
-        return self.run_dir(run_id, workspace) / f"stan_{station}{suffix}.yaml"
+        return self.run_dir(run_id, workspace, client_id) / f"stan_{station}{suffix}.yaml"
 
-    def envelope_final_path(self, run_id: str, workspace: str | None = None) -> Path:
+    def envelope_final_path(self, run_id: str, workspace: str | None = None, client_id: str = "") -> Path:
         """Zwraca sciezke ostatecznej koperty."""
-        return self.run_dir(run_id, workspace) / "envelope_final.yaml"
+        return self.run_dir(run_id, workspace, client_id) / "envelope_final.yaml"
+
+    # MT: sciezki per-klient
+
+    def clients_dir(self, workspace: str | None = None) -> Path:
+        """Zwraca katalog wszystkich klientow."""
+        base = self._workspace_base(workspace)
+        return base / ".ai-kb" / "clients"
+
+    def client_dir(self, client_id: str, workspace: str | None = None) -> Path:
+        """Zwraca katalog pojedynczego klienta."""
+        return self.clients_dir(workspace) / client_id
+
+    def client_context_path(self, client_id: str, workspace: str | None = None) -> Path:
+        """Zwraca sciezke pliku context.yaml klienta."""
+        return self.client_dir(client_id, workspace) / "context.yaml"
+
+    def client_rag_dir(self, client_id: str, workspace: str | None = None) -> Path:
+        """Zwraca katalog RAG per-klient."""
+        return self.client_dir(client_id, workspace) / "rag"
+
+    def client_memory_dir(self, client_id: str, workspace: str | None = None) -> Path:
+        """Zwraca katalog pamieci AI per-klient."""
+        return self.client_dir(client_id, workspace) / "memory"
+
+    # MT: sciezki wspoldzielone
+
+    def shared_knowledge_dir(self, workspace: str | None = None) -> Path:
+        """Zwraca katalog wiedzy wspoldzielonej."""
+        base = self._workspace_base(workspace)
+        return base / ".ai-kb" / "shared-knowledge"
+
+    def shared_rag_dir(self, workspace: str | None = None) -> Path:
+        """Zwraca katalog wspoldzielonego RAG."""
+        return self.shared_knowledge_dir(workspace) / "rag"
+
+    def shared_memory_dir(self, workspace: str | None = None) -> Path:
+        """Zwraca katalog wspoldzielonej pamieci AI."""
+        return self.shared_knowledge_dir(workspace) / "memory"
 
 
 # Singleton konfiguracji

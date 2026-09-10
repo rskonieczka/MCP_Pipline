@@ -1,6 +1,8 @@
 # Referencja narzedzi MCP
 
-Serwer wystawia 26 narzedzi MCP podzielonych na 7 grup. Wszystkie narzedzia przyjmuja i zwracaja struktury JSON zgodne z modelem Pydantic.
+Serwer wystawia ~49 narzedzi MCP podzielonych na 11 grup. Wszystkie narzedzia przyjmuja i zwracaja struktury JSON zgodne z modelem Pydantic.
+
+**Parametr `client_id`**: Wszystkie narzedzia zarzadzania run'ami, checkpointami, manifestami, RTM i pamiecia przyjmuja opcjonalny `client_id`. Hierarchia rozwiazywania: jawny parametr -> aktywny klient sesji (`set_active_client`) -> `PIPELINE_DEFAULT_CLIENT_ID` -> tryb legacy (`""`). Narzedzia wieloklientowe (grupy 8-11) zawsze wymagaja `client_id` (oprocz wiedzy i RAG wspoldzielonego).
 
 ## 1. Run management
 
@@ -449,3 +451,146 @@ Wszystkie narzedzia zwracaja bledy przez mechanizm MCP error response:
 | `LLM_NOT_CONFIGURED` | Tryb auto-pilot wymaga klucza API LLM |
 | `INVALID_PATH` | Sciezka pipeline'u niezgodna z definicja |
 | `RUN_CLOSED` | Run zakonczony, nie mozna wykonywac operacji |
+| `CLIENT_NOT_FOUND` | Klient o podanym `client_id` nie istnieje w rejestrze |
+| `CLIENT_ALREADY_EXISTS` | Klient o podanym `client_id` juz zarejestrowany |
+| `INVALID_CLIENT_ID` | `client_id` niezgodny z regex `^[a-z0-9][a-z0-9-]*[a-z0-9]$` |
+
+## 8. Zarzadzanie klientami (multi-tenant)
+
+### 8.1. register_client
+
+Rejestruje nowego klienta w `<workspace>/.ai-kb/clients/<client_id>/context.yaml`.
+
+```python
+register_client(
+    client_id: str,          # wymagany: slug (regex ^[a-z0-9][a-z0-9-]*[a-z0-9]$)
+    display_name: str,       # wymagany: nazwa wyswietlana
+    nip: str = "",           # opcjonalny: NIP
+    external_id: str = "",   # opcjonalny: ID z systemu zewnetrznego
+    aliases: list[str] = [], # opcjonalne: aliasy dla dopasowania
+    metadata: dict = {},     # opcjonalne: metadane
+    workspace: str = ""
+) -> { client_id, display_name, status: "aktywny" }
+```
+
+### 8.2. resolve_client
+
+Dopasowuje zapytanie tekstowe do klienta (6 warstw: L1-L6).
+
+```python
+resolve_client(
+    query: str,              # wymagany: tekst do dopasowania
+    workspace: str = ""
+) -> { client_id, display_name, confidence, match_layer, method }
+```
+
+### 8.3. set_active_client / get_active_client
+
+Ustawia/pobiera aktywnego klienta dla sesji procesu MCP.
+
+```python
+set_active_client(client_id: str) -> { active_client_id }
+get_active_client() -> { active_client_id }
+```
+
+### 8.4. get_client_info / list_clients
+
+```python
+get_client_info(client_id: str, workspace: str = "") -> { client_id, display_name, nip, ... }
+list_clients(include_archived: bool = False, workspace: str = "") -> [{ client_id, display_name, status }]
+```
+
+### 8.5. update_client / archive_client / delete_client
+
+```python
+update_client(client_id: str, updates: dict, workspace: str = "") -> { ... }
+archive_client(client_id: str, workspace: str = "") -> { status: "zarchiwizowany" }
+delete_client(client_id: str, workspace: str = "") -> { deleted, runs_deleted, memgraph_deleted }
+```
+
+`delete_client` usuwa pliki (`shutil.rmtree`) i wezly Memgraph (`delete_client_nodes` - GDPR).
+
+## 9. Wiedza wspoldzielona
+
+### 9.1. save_shared_knowledge
+
+Zapisuje wpis wiedzy w kategorii `decisions`, `patterns` lub `pitfalls`.
+
+```python
+save_shared_knowledge(
+    category: str,           # "decisions" | "patterns" | "pitfalls"
+    title: str,              # wymagany
+    content: str,            # wymagany
+    knowledge_id: str = "",  # opcjonalny (auto-generowany z title)
+    workspace: str = ""
+) -> { knowledge_id, category, title }
+```
+
+### 9.2. get_shared_knowledge / search_shared_knowledge / list_shared_knowledge
+
+```python
+get_shared_knowledge(knowledge_id: str, workspace: str = "") -> { ... }
+search_shared_knowledge(query: str, category: str = "", workspace: str = "") -> [{ ... }]
+list_shared_knowledge(category: str = "", workspace: str = "") -> [{ ... }]
+```
+
+## 10. Pamiec AI per-klient
+
+### 10.1. save_client_memory
+
+Zapisuje wpis pamieci AI dla klienta. Auto-generowany `memory_id` jest unikalny przy kolizji tematu.
+
+```python
+save_client_memory(
+    topic: str,              # wymagany
+    content: str,            # wymagany
+    client_id: str = "",     # opcjonalny (hierarchia rozwiazywania)
+    tags: list[str] = [],
+    memory_id: str = "",     # opcjonalny (jawny = upsert)
+    workspace: str = ""
+) -> { memory_id, topic, scope: "client" }
+```
+
+### 10.2. save_shared_memory
+
+Zapisuje wpis pamieci wspoldzielonej (cross-client).
+
+```python
+save_shared_memory(topic: str, content: str, tags: list = [], memory_id: str = "") -> { ... }
+```
+
+### 10.3. get_client_memory / list_client_memories / search_client_memories
+
+```python
+get_client_memory(memory_id: str, client_id: str = "", workspace: str = "") -> { ... }
+list_client_memories(client_id: str = "", workspace: str = "") -> [{ ... }]
+search_client_memories(
+    query: str, client_id: str = "", include_shared: bool = True, workspace: str = ""
+) -> [{ memory_id, topic, scope, client_id }]
+```
+
+## 11. RAG per-klient
+
+### 11.1. index_client_document
+
+Indeksuje dokument w RAG klienta (indeks keyword-based, atomowy zapis).
+
+```python
+index_client_document(
+    doc_id: str,             # wymagany
+    content: str,            # wymagany
+    client_id: str = "",     # opcjonalny (hierarchia rozwiazywania)
+    metadata: dict = {},
+    workspace: str = ""
+) -> { doc_id, indexed: True }
+```
+
+### 11.2. search_client_rag / search_shared_rag / list_rag_documents
+
+```python
+search_client_rag(
+    query: str, client_id: str = "", include_shared: bool = True, limit: int = 10
+) -> [{ doc_id, score, snippet }]
+search_shared_rag(query: str, limit: int = 10) -> [{ doc_id, score, snippet }]
+list_rag_documents(client_id: str = "", workspace: str = "") -> [{ doc_id, metadata }]
+```

@@ -35,13 +35,16 @@ Bramka jakosci po `sprawdzenie` z max 2 iteracjami i eskalacja.
 
 RTM (Requirements Traceability Matrix): automatyczne sledzenie wymagan przez pipeline. Ekstrakcja po stacji `zmienne`, aktualizacja statusow po `realizuj`/`weryfikacja`/`sprawdzenie`. 4 narzedzia MCP: `get_rtm`, `update_rtm`, `add_rtm_entry`, `validate_rtm_coverage`. Integracja z Memgraph (wezly :Wymaganie, relacje :ADRESUJE, :WERYFIKUJE).
 
+Wieloklientowosc (multi-tenant): izolacja katalogowa `.ai-kb/clients/<client_id>/` dla run'ow, pamieci i RAG per-klient. Wiedza wspoldzielona w `.ai-kb/shared-knowledge/`. `client_id` propagowane przez wszystkie narzedzia, checkpointy, manifesty, koperte i Memgraph (wbudowane w ID wezlow). Rejestr klientow z 6-warstwowym dopasowaniem (L1-L6). 23 nowe narzedzia MCP w 4 grupach (klienci, wiedza, pamiec, RAG). Tryb legacy (brak `client_id`) zachowany dla kompatybilnosci wstecz.
+
 ## Status
 
 - Faza: implementacja ukonczona, weryfikacja pozytywna, AUDYT CELU 2026-06-29: cel realizowany w pelni
 - Audyt celu (run 2026-06-29-sprawdzenie-celu-projektu, sciezka doglebny): 14 werdyktow weryfikacji potwierdzonych, 0 obalonych, 2 braki dowodowe (auto-pilot z realnym LLM, Memgraph z realna baza - integracje opcjonalne). Ocena ogolna: wysoka. Wszystkie deklarowane komponenty celu potwierdzone w kodzie i testach funkcjonalnych.
-- Implementacja kodu: 17 modulow Python, 26 narzedzi MCP
+- Audyt kodu wieloklientowego (2026-09-10): 7 usterek wykrytych (F1-F7), wszystkie naprawione. Kolizje node IDs Memgraph, ciche nadpisywanie pamieci, nieatomowe zapisy, brak walidacji klienta, brak czyszczenia Memgraph, wyciek pamieci lockow.
+- Implementacja kodu: 21 modulow Python, ~49 narzedzi MCP (26 bazowych + 23 wieloklientowych)
 - Skille: 14 wbudowanych (13 stacji + audyt_runu), weryfikacja integralnosci OK
-- Testy: start_run, execute_station, get_run_status, get_next_station, get_envelope, list_checkpoints, close_run, quality_gate (3 iteracje + eskalacja), get_gate_iterations, get_station_contract, list_stations, verify_integrity, stdio protocol - wszystkie PASS. Testy RTM: test_rtm (38 testow: model RTMEntry, ekstrakcja, auto-aktualizacja, walidacja pokrycia, narzedzia MCP, E2E, kompatybilnosc wsteczna) - wszystkie PASS. Total: 55 testow PASS.
+- Testy: start_run, execute_station, get_run_status, get_next_station, get_envelope, list_checkpoints, close_run, quality_gate (3 iteracje + eskalacja), get_gate_iterations, get_station_contract, list_stations, verify_integrity, stdio protocol - wszystkie PASS. Testy RTM: test_rtm (38 testow) - wszystkie PASS. Testy wieloklientowe: test_client_isolation (izolacja run'ow, pamieci, RAG, aktywny klient, kontrakt get_run_status, wspolbiezne indeksowanie 20 dokumentow, kolizje pamieci, walidacja klienta, czyszczenie Memgraph), test_client_registry (rejestr, aliasy, path traversal, dopasowanie, node IDs) - wszystkie PASS. Total: 131 testow PASS.
 - Zaleznosci: fastmcp 3.4.2, pydantic 2.13.4, pyyaml 6.0.3, neo4j 6.2.0, openai 2.44.0, anthropic 0.113.0
 - Venv: .venv/ z instalacja -e ".[all]"
 - Uruchomienie: .venv/bin/python -m pipeline_mcp.server (stdio MCP)

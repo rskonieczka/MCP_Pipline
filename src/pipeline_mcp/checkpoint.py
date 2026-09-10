@@ -13,11 +13,11 @@ from .models import CheckpointNotFoundError, Envelope
 
 def save_checkpoint(
     run_id: str, station: str, envelope: Envelope, suffix: str = "",
-    workspace: str | None = None,
+    workspace: str | None = None, client_id: str = "",
 ) -> str:
     """Zapisuje koperte do pliku checkpointu."""
     config = get_config()
-    checkpoint_path = config.checkpoint_path(run_id, station, suffix, workspace)
+    checkpoint_path = config.checkpoint_path(run_id, station, suffix, workspace, client_id)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Dodaj metadane checkpointu
@@ -58,16 +58,17 @@ def _load_envelope_file(checkpoint_path: Path) -> Envelope:
 
 def load_checkpoint(
     run_id: str, station: str, suffix: str = "", workspace: str | None = None,
+    client_id: str = "",
 ) -> Envelope:
     """Odczytuje koperte z pliku checkpointu."""
     config = get_config()
-    return _load_envelope_file(config.checkpoint_path(run_id, station, suffix, workspace))
+    return _load_envelope_file(config.checkpoint_path(run_id, station, suffix, workspace, client_id))
 
 
-def list_checkpoints(run_id: str, workspace: str | None = None) -> list[dict]:
+def list_checkpoints(run_id: str, workspace: str | None = None, client_id: str = "") -> list[dict]:
     """Lista wszystkich checkpointow dla run'u."""
     config = get_config()
-    run_dir = config.run_dir(run_id, workspace)
+    run_dir = config.run_dir(run_id, workspace, client_id)
 
     if not run_dir.exists():
         return []
@@ -99,7 +100,7 @@ def list_checkpoints(run_id: str, workspace: str | None = None) -> list[dict]:
 
 
 def get_latest_checkpoint(
-    run_id: str, workspace: str | None = None,
+    run_id: str, workspace: str | None = None, client_id: str = "",
 ) -> tuple[str, Envelope] | None:
     """Zwraca ostatni checkpoint (stacja, koperta). None jesli brak.
 
@@ -108,7 +109,7 @@ def get_latest_checkpoint(
     """
     from .manifest import load_manifest
     config = get_config()
-    manifest_path = config.manifest_path(run_id, workspace)
+    manifest_path = config.manifest_path(run_id, workspace, client_id)
 
     if manifest_path.exists():
         manifest = load_manifest(manifest_path)
@@ -117,11 +118,11 @@ def get_latest_checkpoint(
             if s.status == "zakonczona" and s.checkpoint:
                 cp_path = Path(s.checkpoint)
                 if cp_path.exists():
-                    # Czytaj plik wskazany w manifescie (moze miec sufiks _iterN)
+                    # Czytaj plik wskazany w manifeście (moze miec sufiks _iterN)
                     return s.stacja, _load_envelope_file(cp_path)
 
     # Fallback: sortuj po timestamp pliku (mtime)
-    checkpoints = list_checkpoints(run_id, workspace)
+    checkpoints = list_checkpoints(run_id, workspace, client_id)
     if not checkpoints:
         return None
 
@@ -132,16 +133,17 @@ def get_latest_checkpoint(
     # Sortuj po timestamp (mtime), nie po nazwie pliku
     main_checkpoints.sort(key=lambda c: c["timestamp"])
     latest = main_checkpoints[-1]
-    envelope = load_checkpoint(run_id, latest["station"], latest["suffix"], workspace)
+    envelope = load_checkpoint(run_id, latest["station"], latest["suffix"], workspace, client_id)
     return latest["station"], envelope
 
 
 def save_envelope_final(
     run_id: str, envelope: Envelope, workspace: str | None = None,
+    client_id: str = "",
 ) -> str:
     """Zapisuje ostateczna koperte po zamknieciu run'u."""
     config = get_config()
-    path = config.envelope_final_path(run_id, workspace)
+    path = config.envelope_final_path(run_id, workspace, client_id)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w", encoding="utf-8") as f:

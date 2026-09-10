@@ -58,6 +58,14 @@
 
 **Alternatywy odrzucone**: Nowa stacja `rtm` (lamie definicje 3 sciezek, wszystkie kontrakty, zbyt inwazyjne), tylko pole w Envelope bez narzedzi (pasywne, brak walidacji pokrycia, brak integracji z Memgraph).
 
+### D10: Wieloklientowosc (multi-tenant) przez izolacje katalogowa + client_id w node IDs
+
+**Dlaczego**: Serwer mial obslugiwac wielu klientow w jednym workspace bez mieszania danych. Izolacja katalogowa (`.ai-kb/clients/<client_id>/pipeline-runs/`) jest prostsza niz izolacja w bazie i zachowuje kompatybilnosc wstecz (tryb legacy gdy `client_id=""`). Kazde narzedzie MCP przyjmuje opcjonalny `client_id`; hierarchia rozwiazywania: jawny parametr -> aktywny klient sesji (`set_active_client`) -> `PIPELINE_DEFAULT_CLIENT_ID` -> tryb legacy. W Memgraph `client_id` jest wbudowane w ID wezlow (`run:<client_id>:<run_id>`, `stacja:<client_id>:<run_id>:<station>`, `wymaganie:<client_id>:<run_id>:<req_id>`, `pamiec:<client_id>:<memory_id>`) - zapobiega kolizjom miedzy klientami przy tym samym `run_id`. Wiedza wspoldzielona (`shared-knowledge/`) i pamiec wspoldzielona sa oznaczone `client_id="shared"`.
+
+**Zakres**: 4 nowe moduly (`client_registry.py`, `client_memory.py`, `knowledge.py`, `rag.py`), 23 nowe narzedzia MCP w 4 grupach (klienci, wiedza wspoldzielona, pamiec per-klient, RAG per-klient), nowe modele (`ClientContext`, `ClientMatch`, `ResolveResult`, `ClientMemoryEntry`, `SharedKnowledgeEntry`), nowe env vars (`PIPELINE_DEFAULT_CLIENT_ID`, `PIPELINE_WORKSPACE`), `client_id` we wszystkich istniejacych narzedziach. Rejestr klientow z 6-warstwowym dopasowaniem (L1-L6: client_id, external_id, alias, id_fragment, fuzzy_name, brak). `delete_client` usuwa pliki i wezly Memgraph (GDPR).
+
+**Alternatywy odrzucone**: Izolacja przez osobne workspace'y (wymaga restartu serwera przy zmianie klienta), izolacja w SQLite zamiast plikow (lamie zasade D3 - YAML jako format persystencji), brak izolacji w Memgraph (kolizje node IDs przy tym samym run_id miedzy klientami - wykryte w audycie jako F1).
+
 ## Pułapki
 
 ### P1: Aktualizacja skilli wymaga aktualizacji pakietu
@@ -135,3 +143,31 @@ Stacja `routing` w sciezce doglebny byla dekoracyjna - jej wyjscie `sciezka` nie
 ### P19: Parser KOPERTA wymagal indentacji kazdej linii (U9, naprawione 2026-09-09)
 
 `parse_llm_output` w `auto_pilot.py` uzywal regex `r"KOPERTA:\s*\n((?:[ \t].*\n)*)"` wymagajacego indentacji kazdej linii po `KOPERTA:`. Pusta linia bez indentacji przerywala parsowanie, powodujac fallback do `_raw_output` i blokowanie auto-pilota. Naprawa: zmieniono na tolerancyjny regex z `re.DOTALL` i automatyczna indentacja linii.
+
+### P20: Kolizja ID wezlow Memgraph miedzy klientami (F1, naprawione 2026-09-10)
+
+ID wezlow grafu (`run:<run_id>`, `stacja:<run_id>:<station>`, `wymaganie:<run_id>:<req_id>`, `pamiec:<memory_id>`) nie zawieraly `client_id`. Poniewaz `_unique_run_id` sprawdza unikalnosc tylko wewnatrz katalogu klienta, dwaj klienci mogli miec ten sam `run_id`. MERGE dopasowywalo wezel drugiego klienta i nadpisywalo jego `client_id`, `zamiar`, `status`. `close_run_node` nie przyjmowalo `client_id` - zamykalo wezel innego klienta. Naprawa: helpery `_run_node_id`, `_station_node_id`, `_req_node_id` dolaczaja `client_id` do ID (legacy gdy puste). `pamiec:{effective_client_id}:{memory_id}` zawsze izolowane. `close_run_node` przyjmuje `client_id`. `add_station_relations` w `envelope.py` uzywa helperow.
+
+### P21: Ciche nadpisywanie pamieci przy kolizji tematu (F2, naprawione 2026-09-10)
+
+`save_client_memory` i `save_shared_memory` auto-generowaly `memory_id` z tematu (`re.sub(...)[:50]`). Dwa zapisy z tym samym tematem (ale rozna tresc) generowaly ten sam `memory_id` - drugi nadpisywal plik pierwszego bez ostrzezenia. Naprawa: `_unique_memory_id(base, path)` przy auto-generowanym ID i istniejacym pliku dolacza timestamp. Jawny `memory_id` zachowuje semantyke upsert.
+
+### P22: Nieatomowe zapisy plikow YAML (F3, naprawione 2026-09-10)
+
+`client_memory.py`, `knowledge.py`, `client_registry.py` zapisywaly pliki przez `open(path, "w")` + `yaml.dump` - nieatomowo. Przerwanie procesu (kill, crash) pozostawialo skrocony/uszkodzony plik YAML. `rag.py` mial juz atomowy wzorzec (`tempfile.mkstemp` + `os.replace`). Naprawa: dodano `_atomic_yaml_dump(path, data)` w `client_memory.py` i `knowledge.py`, przepisano `client_registry._save_client` na atomowy wzorzec.
+
+### P23: start_run bez walidacji istnienia klienta (F4, naprawione 2026-09-10)
+
+`start_run` przyjmowal `client_id` i tworzyl katalog `clients/<client_id>/pipeline-runs/` bez sprawdzania czy klient jest zarejestrowany. Powstawaly osierocone katalogi dla niezarejestrowanych klientow - niewidoczne w `list_clients`, niezarzadzalne przez `update_client`/`archive_client`/`delete_client`. Naprawa: gdy `cid` niepuste, `start_run` sprawdza `client_registry.load_client(cid, ws)` i rzuca `ClientNotFoundError` gdy nie istnieje. Tryb legacy (cid puste) nie wymaga rejestracji.
+
+### P24: delete_client nie czyscil wezlow Memgraph (F5, naprawione 2026-09-10)
+
+`delete_client` usuwal pliki z dysku (`shutil.rmtree`) ale nie usuwal wezlow Run, Stacja, Wymaganie, Pamiec z Memgraph. Docstring deklarowal "GDPR right to be forgotten" ale dane grafu pozostawaly. Naprawa: dodano `memgraph.delete_client_nodes(client_id)` wykonujace `MATCH (n) WHERE n.client_id = $client_id AND n.client_id <> 'shared' DETACH DELETE n`. Wywolywane w `delete_client` przed `shutil.rmtree`. Wynik zwracany w polu `memgraph_deleted`. Poprawiono tez liczenie `run_count` - tylko katalogi (`d.is_dir()`), nie pliki.
+
+### P25: Nieograniczony wzrost _index_locks w rag.py (F6, naprawione 2026-09-10)
+
+`_index_locks` w `rag.py` byl slownikiem modulowym, do ktorego dodawano nowy `threading.Lock` dla kazdej unikalnej sciezki indeksu. Locki nigdy nie byly usuwane - wyciek pamieci w dlugiej sesji z wieloma klientami/workspace'ami. Naprawa: zmieniono na `weakref.WeakValueDictionary` - locki automatycznie zwalniane gdy nie sa uzywane (GC zbiera obiekty bez silnych referencji).
+
+### P26: close_run_node i write_relations_from_envelope bez client_id (F7, naprawione 2026-09-10)
+
+`close_run_node` nie przyjmowalo `client_id` - MERGE dopasowywalo wezel niezaleznie od klienta. `write_relations_from_envelope` przekazywalo `rel.zrodlo`/`rel.cel` z koperty, ktore nie zawieraly `client_id`. Powiazane z P20 - po dodaniu `client_id` do ID wezlow, te funkcje musialy tez go przekazywac. Naprawa: `close_run_node` przyjmuje `client_id` (wywolanie w `server.py` przekazuje `manifest.client_id`), `add_station_relations` w `envelope.py` konstruuje node IDs z `envelope.client_id` przez helpery.

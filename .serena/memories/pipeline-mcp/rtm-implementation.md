@@ -21,6 +21,6 @@ RTM dodane jako modul + narzedzia MCP (Wariant A), nie jako nowa stacja.
 
 `nieadresowane` -> `adresowane` -> `zrealizowane` -> `weryfikowane` / `niespelnione`
 
-## Liczniki (2026-09-09)
+## Liczniki (2026-09-10, po dodaniu wieloklientowosci D10)
 
-17 modulow, 26 narzedzi MCP, 55 testow.
+21 modulow, ~49 narzedzi MCP, 131 testow. Node IDs Memgraph dla Wymaganie zawieraja client_id: `wymaganie:<client_id>:<run_id>:<req_id>`.
