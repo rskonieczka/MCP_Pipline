@@ -62,6 +62,7 @@ from .quality_gate import evaluate_gate, get_gate_history
 from .routing import (
     determine_path,
     get_next_station as routing_get_next_station,
+    get_station_sequence,
     is_station_in_path,
 )
 from .stations import STATIONS, get_station, station_exists
@@ -264,14 +265,15 @@ def start_run(
     envelope = create_envelope(run_id, zamiar, sciezka="pelny", client_id=cid)
 
     # Zapisz wejscie uzytkownika do koperty
+    # D3: zawsze zapisuj wejscie (takze tryb_inicjacji) - wczesniej warunek
+    # any([kontekst, zrodla]) powodowal utrate tryb_inicjacji w kopercie
     wejscie = {
         "kontekst": kontekst,
         "zrodla": zrodla or [],
         "tryb_inicjacji": tryb_inicjacji,
     }
-    if any([kontekst, zrodla]):
-        envelope.wejscie = wejscie
-        save_checkpoint(run_id, "_start", envelope, "", ws, cid)
+    envelope.wejscie = wejscie
+    save_checkpoint(run_id, "_start", envelope, "", ws, cid)
 
     # Zapisz wezel Run do Memgraph (A1: strukturalny wezel grafu)
     from . import memgraph
@@ -1231,7 +1233,17 @@ def auto_pilot_start(
             run_id, station, output, skip_validation=True, workspace=workspace, client_id=cid
         )
         executed.append(station)
-        auto_pilot.update_auto_pilot_state(run_id, station, "zakonczona")
+
+        # D1+D2: aktualizuj stacje_pozostale i iteracja_bramki z manifestu
+        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        sequence = get_station_sequence(manifest.sciezka)
+        executed_set = set(executed)
+        remaining = [s for s in sequence if s not in executed_set]
+        auto_pilot.update_auto_pilot_state(
+            run_id, station, "zakonczona",
+            stacje_pozostale=remaining,
+            iteracja_bramki=manifest.iteracja_bramki,
+        )
 
         if to_station and station == to_station:
             final_status = "zatrzymany"
@@ -1245,7 +1257,11 @@ def auto_pilot_start(
             if gate["gate_decision"] == "eskalacja":
                 final_status = "zablokowany"
                 bledy.append("Bramka jakosci: eskalacja po max iteracjach")
-                auto_pilot.update_auto_pilot_state(run_id, station, "zablokowany", "eskalacja bramki")
+                manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+                auto_pilot.update_auto_pilot_state(
+                    run_id, station, "zablokowany", "eskalacja bramki",
+                    iteracja_bramki=manifest.iteracja_bramki,
+                )
                 break
             station = gate["next_station"]
         else:
@@ -1722,6 +1738,7 @@ def list_rag_documents(
 async def pipeline_start(
     zamiar: str,
     kontekst: str = "",
+    zrodla: list[str] | None = None,
     workspace: str = "",
     client_id: str = "",
 ) -> list[Message]:
@@ -1730,12 +1747,14 @@ async def pipeline_start(
     Args:
         zamiar: Cel zadania od uzytkownika (wymagany)
         kontekst: Dodatkowy kontekst zadania (opcjonalny)
+        zrodla: Zrodla bazowe (opcjonalne)
         workspace: Sciezka do workspace'a (opcjonalna, domyslnie cwd)
         client_id: Identyfikator klienta (opcjonalny, domyslnie aktywny klient sesji)
     """
     result = await mcp.call_tool("start_run", {
         "zamiar": zamiar,
         "kontekst": kontekst,
+        "zrodla": zrodla or [],
         "workspace": workspace,
         "client_id": client_id,
     })

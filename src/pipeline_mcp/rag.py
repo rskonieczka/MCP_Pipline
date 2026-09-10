@@ -218,6 +218,8 @@ def list_rag_documents(
             "doc_id": d.get("doc_id", ""),
             "title": d.get("title", ""),
             "scope": d.get("scope", ""),
+            "client_id": d.get("client_id", ""),
+            "metadata": d.get("metadata", {}),
             "indexed_at": d.get("indexed_at", ""),
         }
         for d in index.get("documents", [])

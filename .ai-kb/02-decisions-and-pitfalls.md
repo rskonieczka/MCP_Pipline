@@ -261,3 +261,19 @@ Doglebna analiza kodu wykryla 8 pozycji dlugu implementacyjnego w 7 modulach. Na
 7. **`auto_pilot.py` - nieimplementowane sledzenie kosztu LLM**: `laczny_koszt` i `ostatni_llm_koszt` zainicjowane w `start_auto_pilot` i zwracane w `AutoPilotStatus`, ale nigdy aktualizowane (dostawcy LLM w `llm.py` nie zwracaja metryk usage). Zgodnie z YAGNI usunieto nieimplementowane pola z `AutoPilotStatus` i stanu auto-pilota.
 
 8. **`rag.py` - `search_rag` zwracal pelne `content` dokumentu**: w przeciwienstwie do `client_memory.py` (ucina do 200 znakow), RAG search zwracal pelna tresc dokumentu w wynikach wyszukiwania - nieefektywne przy duzych dokumentach. Naprawa: uciecie `content[:200]` spojne z `client_memory.py`.
+
+### P30: Dlug implementacyjny - audyt 2026-09-10 (naprawione)
+
+Kolejny audyt kodu wykryl 6 pozycji dlugu implementacyjnego niewykrytych w P29. Naprawiono wszystkie, 131 testow PASS.
+
+1. **`auto_pilot.py` - `stacje_pozostale` nigdy nie aktualizowane** (D1): `update_auto_pilot_state` aktualizowalo tylko `stacja_aktualna` i `stacje_wykonane`. `stacje_pozostale` zawsze pozostawalo pusta lista `[]`. `get_auto_pilot_status` zwracalo bledne dane - agent nie widzial ile stacji zostalo do wykonania. Naprawa: dodano opcjonalne parametry `stacje_pozostale` i `iteracja_bramki` do `update_auto_pilot_state`, aktualizacja w petli `auto_pilot_start` w `server.py` po kazdej stacji (obliczane z `get_station_sequence` i listy `executed`).
+
+2. **`auto_pilot.py` - `iteracja_bramki` w stanie auto-pilota nigdy nie aktualizowane** (D2): stan auto-pilota inicjowany z `iteracja_bramki: 0` i nigdy nie aktualizowany z manifestu. `get_auto_pilot_status` zawsze zwracalo 0, nawet po powrotach bramki. Naprawa: wspolna z D1 - `iteracja_bramki` przekazywane z manifestu po kazdej stacji i po wywolaniu `quality_gate`.
+
+3. **`server.py` - `start_run` nie zapisywal `wejscie` do koperty gdy brak kontekstu i zrodel** (D3): warunek `if any([kontekst, zrodla])` powodowal, ze `envelope.wejscie` pozostawalo pustym dict, a checkpoint `_start` nie byl tworzony. `tryb_inicjacji` (domyslnie "pelny") byl tracony w kopercie - agent nie widzial go przy odczycie przez `get_envelope`. Naprawa: usunieto warunek - `wejscie` zawsze zapisywane do koperty i checkpoint `_start` zawsze tworzony.
+
+4. **`server.py` - `pipeline_start` prompt nie obslugiwal `zrodla`** (D4): prompt MCP `pipeline_start` nie przyjmowal parametru `zrodla` ani nie przekazywal go do `start_run`. Uzytkownik nie mogl przekazac zrodel bazowych przez prompt auto-inicjalizacji. Naprawa: dodano parametr `zrodla: list[str] | None = None` do promptu i przekazywanie do `start_run`.
+
+5. **`rag.py` - `list_rag_documents` nie zwracal `client_id` ani `metadata`** (D5): niepelne metadane zwracane przez narzedzie MCP `list_rag_documents` - brak `client_id` i `metadata` dokumentu. Naprawa: dodano `client_id` i `metadata` do zwracanego dict.
+
+6. **`auto_pilot.py` - `_auto_pilot_state` nigdy nie czyszczone** (D6): stan auto-pilota w pamieci rosl nieograniczenie w dlugich sesjach z wieloma run'ami. Po zakonczeniu run'a stan pozostawal w slowniku modulowym. Naprawa: w `start_auto_pilot` czyszczenie stanow o statusie `zakonczony`/`zablokowany`/`zatrzymany` przed inicjalizacja nowego stanu.

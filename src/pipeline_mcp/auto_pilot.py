@@ -35,6 +35,13 @@ def start_auto_pilot(
             "Auto-pilot wymaga skonfigurowanego LLM. Ustaw PIPELINE_LLM_API_KEY."
         )
 
+    # D6: wyczysc stany zakonczone/zablokowane/zatrzymane z poprzednich run'ow
+    # (zapobiega nieograniczonemu wzrostowi _auto_pilot_state w dlugich sesjach)
+    finished_statuses = ("zakonczony", "zablokowany", "zatrzymany")
+    stale = [rid for rid, s in _auto_pilot_state.items() if s.get("status") in finished_statuses]
+    for rid in stale:
+        del _auto_pilot_state[rid]
+
     _auto_pilot_state[run_id] = {
         "status": "uruchomiony",
         "stacja_aktualna": from_station or "inicjuj",
@@ -185,13 +192,24 @@ def update_auto_pilot_state(
     station: str,
     status: str,
     error: str = "",
+    stacje_pozostale: list[str] | None = None,
+    iteracja_bramki: int | None = None,
 ) -> None:
-    """Aktualizuje stan auto-pilota w pamieci."""
+    """Aktualizuje stan auto-pilota w pamieci.
+
+    D1+D2: stacje_pozostale i iteracja_bramki aktualizowane z manifestu
+    po kazdej stacji, aby get_auto_pilot_status zwracalo poprawne dane.
+    """
     if run_id not in _auto_pilot_state:
         return
 
     state = _auto_pilot_state[run_id]
     state["stacja_aktualna"] = station
+
+    if stacje_pozostale is not None:
+        state["stacje_pozostale"] = stacje_pozostale
+    if iteracja_bramki is not None:
+        state["iteracja_bramki"] = iteracja_bramki
 
     if status == "zakonczona":
         if station not in state["stacje_wykonane"]:
