@@ -133,13 +133,14 @@ Po zakonczeniu pracy emituj koperte z:
 - `walidacja.stacja_docelowa: sprawdzenie`,
 - `walidacja.pola_wymagane: [PYTANIE ZRODLOWE, ODPOWIEDZ DO OCENY]` -> `PYTANIE ZRODLOWE` z `stan.zamiar` (kontekstowe), `ODPOWIEDZ` z `pola_stacji.realizuj.zmiany` (wnioskowane),
 - `relacje`:
-  - `stacja:weryfikacja` -> `stacja:sprawdzenie` (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:weryfikacja` (typ: `zawiera`),
-  - `stacja:weryfikacja` -> `twierdzenie:T1`, `twierdzenie:T2`, ... (typ: `wyprodukowala`, per twierdzenie),
-  - `stacja:weryfikacja` -> `werdykt:W1`, `werdykt:W2`, ... (typ: `wyprodukowala`, per werdykt),
+  - `stacja:<client_id>:<run_id>:weryfikacja` -> `stacja:<client_id>:<run_id>:sprawdzenie` (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:weryfikacja` (typ: `zawiera`),
+  - `stacja:<client_id>:<run_id>:weryfikacja` -> `twierdzenie:T1`, `twierdzenie:T2`, ... (typ: `wyprodukowala`, per twierdzenie),
+  - `stacja:<client_id>:<run_id>:weryfikacja` -> `werdykt:W1`, `werdykt:W2`, ... (typ: `wyprodukowala`, per werdykt),
   - `werdykt:W1` -> `twierdzenie:T1` (typ: `dotyczy`, per werdykt dotyczący twierdzenia).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ja do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_08_weryfikacja.yaml` i zaktualizuj manifest.
+Po wyemitowaniu koperty zapisz ja do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_08_weryfikacja.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest.
 
 ## Statusy werdyktu
 

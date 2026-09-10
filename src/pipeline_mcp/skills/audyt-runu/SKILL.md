@@ -38,7 +38,7 @@ Nie stosuj, gdy:
 - użytkownik chce audytować zgodność artefaktu z pytaniem - użyj skilla `sprawdzenie`,
 - użytkownik chce ocenić wartość ex-post rozwiązania - użyj skilla `ewaluacja`,
 - użytkownik chce zapisać wnioski z run'u - użyj skilla `utrwal`,
-- brak `run_id` albo run nie istnieje w `.ai-kb/pipeline-runs/`.
+- brak `run_id` albo run nie istnieje w `.ai-kb/clients/<client_id>/pipeline-runs/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/`).
 
 ## Język
 
@@ -59,7 +59,7 @@ Opcjonalnie:
 ## Kontrola kompletności wejścia
 
 1. Jeśli brakuje `RUN_ID`, poproś o wskazanie.
-2. Jeśli katalog `.ai-kb/pipeline-runs/<run_id>/` nie istnieje, zgłoś błąd i zakończ.
+2. Jeśli katalog `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) nie istnieje, zgłoś błąd i zakończ.
 3. Jeśli `manifest.yaml` nie istnieje albo jest uszkodzony, zgłoś błąd i zakończ.
 4. Jeśli Memgraph jest niedostępny, wykonaj audyt tylko na podstawie checkpointów plikowych i oznacz ograniczenie.
 
@@ -71,7 +71,7 @@ Opcjonalnie:
 
 ## Źródła prawdy
 
-1. `.ai-kb/pipeline-runs/<run_id>/` - manifest i checkpointy plikowe.
+1. `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) - manifest i checkpointy plikowe.
 2. Memgraph MCP - graf powiązań run'u.
 3. `kontrakty_pipelines.md` - kontrakty I/O stacji (do weryfikacji pól wymaganych).
 4. `_shared/graf-pipeline.md` - schemat grafu, reguły integralności, zapytania wzorcowe.
@@ -145,7 +145,7 @@ Sprawdź wszystkie 10 reguł integralności z `_shared/graf-pipeline.md`:
 Sprawdź:
 
 - czy run ma relacje `KONTYNUACJA` / `NAPRAWIA` / `PONOWNE_URUCHOMIENIE` do innych run'ów, jeśli zgłoszono to w manifeście,
-- czy runy powiązane istnieją w `.ai-kb/pipeline-runs/`,
+- czy runy powiązane istnieją w `.ai-kb/clients/<client_id>/pipeline-runs/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/`),
 - czy relacje między runami są symetryczne (jeśli A `KONTYNUACJA` B, to B nie powinno `KONTYNUACJA` A).
 
 ### 7. Wykrywanie anomalii automatyczne

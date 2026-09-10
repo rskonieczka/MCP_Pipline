@@ -108,7 +108,7 @@ Zasady:
 
 ### Procedura restartu
 
-1. Odczytaj `manifest.yaml` z `.ai-kb/pipeline-runs/<run_id>/`.
+1. Odczytaj `manifest.yaml` z `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`).
 2. Zidentyfikuj ostatnią stację ze statusem `zakonczona`.
 3. Odczytaj jej checkpoint (`stan_<NN>_<stacja>.yaml`).
 4. Zweryfikuj integralność checkpointu (patrz "Walidacja integralności checkpointu" niżej).

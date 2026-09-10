@@ -105,12 +105,13 @@ Po zakończeniu pracy emituj kopertę z:
 - `walidacja.stacja_docelowa: utrwal`,
 - `walidacja.pola_wymagane: [WNIOSKI LUB DECYZJE]` -> z `pola_stacji.ewaluacja.wnioski` (bezpośrednie),
 - `relacje`:
-  - `stacja:ewaluacja` -> `stacja:utrwal` (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:ewaluacja` (typ: `zawiera`),
-  - `stacja:ewaluacja` -> `wniosek:WN1`, `wniosek:WN2`, ... (typ: `wyprodukowala`, per wniosek),
-  - `wniosek:WN1` -> `stacja:ewaluacja` (typ: `wyprowadzony_z`, per wniosek wyprowadzony ze stacji).
+  - `stacja:<client_id>:<run_id>:ewaluacja` -> `stacja:<client_id>:<run_id>:utrwal` (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:ewaluacja` (typ: `zawiera`),
+  - `stacja:<client_id>:<run_id>:ewaluacja` -> `wniosek:WN1`, `wniosek:WN2`, ... (typ: `wyprodukowala`, per wniosek),
+  - `wniosek:WN1` -> `stacja:<client_id>:<run_id>:ewaluacja` (typ: `wyprowadzony_z`, per wniosek wyprowadzony ze stacji).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_10_ewaluacja.yaml` i zaktualizuj manifest.
+Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_10_ewaluacja.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest.
 
 ## Instrukcja główna
 

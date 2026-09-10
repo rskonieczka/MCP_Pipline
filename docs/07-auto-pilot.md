@@ -23,7 +23,9 @@ auto_pilot_start(
     run_id=run["run_id"],
     from_station="inicjuj",   # puste = od nastepnej stacji
     to_station="",            # puste = do konca pipeline'u
-    max_gate_iterations=2
+    max_gate_iterations=2,
+    workspace="",
+    client_id=""
 )
 
 # 3. Monitoruj status
@@ -38,7 +40,9 @@ zakonczenia sciezki, osiagniecia `to_station`, blokady lub eskalacji bramki
 i zwraca finalny status wraz z lista wykonanych stacji. `auto_pilot_status`
 sluzy do wgladu w stan po zakonczeniu (lub z innego klienta). Parametr
 `max_gate_iterations` ogranicza liczbe powrotow bramki tolerowanych przez
-auto-pilot, niezaleznie od limitu samej bramki.
+auto-pilot, niezaleznie od limitu samej bramki. Auto-pilot ma rowniez wewnetrzny
+limit 40 krokow (`_AUTO_PILOT_MAX_STEPS`) - po jego przekroczeniu status ustawiany
+jest na `zablokowany`.
 
 ## 3. Przeplyw wykonania
 
@@ -112,25 +116,49 @@ ZWROC WYJSCIE STACJI ORAZ ZAKONCZ BLOKIEM KOPERTA ZAKTUALIZOWANYM O TWOJE WYJSCI
 
 ## 5. Parsowanie wyjscia LLM
 
-Serwer parsuje wyjscie LLM, szukajac bloku `KOPERTA:`:
+Serwer parsuje wyjscie LLM, szukajac bloku `KOPERTA:`. U9: tolerancyjny parser
+akceptuje puste linie bez indentacji w bloku KOPERTA (automatyczna indentacja).
 
 ```python
 def parse_llm_output(output: str, station: str) -> dict:
-    # Szukaj bloku KOPERTA: ... (YAML)
+    # U9: tolerancyjny regex z re.DOTALL - akceptuje puste linie bez indentacji
     koperta_match = re.search(
-        r'KOPERTA:\s*\n((?:  .*\n)*)',
-        output
+        r"KOPERTA:\s*\n(.*?)(?=\n\S|\Z)",
+        output,
+        re.DOTALL,
     )
-    if not koperta_match:
-        raise LLMOutputParseError("Brak bloku KOPERTA w wyjsciu LLM")
+    if koperta_match:
+        raw_block = koperta_match.group(1)
+        # Indentuj kazda linie o 2 spacje (YAML wymaga indentacji)
+        indented = "\n".join(
+            "  " + line if line.strip() else line
+            for line in raw_block.splitlines()
+        )
+        koperta_yaml = "KOPERTA:\n" + indented
+        try:
+            koperta_data = yaml.safe_load(koperta_yaml)
+            if koperta_data and "KOPERTA" in koperta_data:
+                pola_stacji = koperta_data["KOPERTA"].get("pola_stacji", {})
+                if station in pola_stacji:
+                    return pola_stacji[station]
+        except yaml.YAMLError:
+            pass
 
-    koperta_yaml = "KOPERTA:\n" + koperta_match.group(1)
-    koperta_data = yaml.safe_load(koperta_yaml)
+    # Fallback: szukaj bloku YAML z polami stacji
+    yaml_block_match = re.search(
+        rf"```yaml\s*\n{station}:\s*\n((?:[ \t].*\n)*)```",
+        output,
+    )
+    if yaml_block_match:
+        try:
+            data = yaml.safe_load(f"{station}:\n" + yaml_block_match.group(1))
+            if data and station in data:
+                return data[station]
+        except yaml.YAMLError:
+            pass
 
-    # Wyodrebnij pola wyjsciowe stacji z pola_stacji.<station>
-    station_output = koperta_data["KOPERTA"]["pola_stacji"][station]
-
-    return station_output
+    # Jesli nie znaleziono struktury, zwroc surowy tekst jako fallback
+    return {"_raw_output": output}
 ```
 
 ## 6. Dostawcy LLM

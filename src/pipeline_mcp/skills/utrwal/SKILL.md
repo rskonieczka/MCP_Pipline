@@ -169,7 +169,7 @@ W ścieżce `dogłębny`, po zapisie checkpointu i zapisie do Memgraph dla stacj
 Po zakończeniu dowolnej stacji merytorycznej (nie `utrwal` samej w sobie), jeśli pipeline jest aktywny:
 
 1. Odczytaj `run_id` z koperty.
-2. Zapisz kopertę do `.ai-kb/pipeline-runs/<run_id>/stan_<NN>_<stacja>.yaml`, gdzie `<NN>` to numer stacji z manifestu.
+2. Zapisz kopertę do `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_<NN>_<stacja>.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`), gdzie `<NN>` to numer stacji z manifestu.
 3. Zaktualizuj `manifest.yaml`:
    - ustaw status stacji na `zakonczona`,
    - wpisz timestamp zakończenia,

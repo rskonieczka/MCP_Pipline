@@ -178,17 +178,18 @@ KOPERTA:
     status: gotowy | wnioskowane | niekompletne
     akcja_naprawcza: ""       # gdy niekompletne: pytanie do uzytkownika / agent_inference / powrot
   relacje:                    # jawne relacje między encjami w run'ie (zapisywane do Memgraph)
-    - zrodlo: "stacja:zmienne"        # identyfikator encji źródłowej
-      cel: "stacja:analiza"           # identyfikator encji docelowej
+    - zrodlo: "stacja:<client_id>:<run_id>:zmienne"        # identyfikator encji źródłowej
+      cel: "stacja:<client_id>:<run_id>:analiza"           # identyfikator encji docelowej
       typ: dostarcza_dane             # typ relacji (zgodny ze schematem grafu)
       pola: [analysis_object.name]    # które pola są przekazywane
     - zrodlo: "zmienna:V001"
       cel: "zmienna:V003"
       typ: zalezy_od
-    - zrodlo: "stacja:dobierz"
-      cel: "stacja:planuj"
+    - zrodlo: "stacja:<client_id>:<run_id>:dobierz"
+      cel: "stacja:<client_id>:<run_id>:planuj"
       typ: dostarcza_rekomendacje
       pola: [rekomendacja]
+    # Node IDs w trybie legacy (brak client_id) nie zawierają prefiksu client_id (np. run:<run_id> zamiast run:<client_id>:<run_id>).
 ```
 
 ### Zasady koperty
@@ -205,10 +206,10 @@ KOPERTA:
 
 Po zakończeniu każdej stacji merytorycznej koperta jest zapisywana do pliku checkpointu. Umożliwia to restart od dowolnej stacji oraz kompresję kontekstu w długich pipeline'ach.
 
-**Struktura katalogów:**
+**Struktura katalogów (tryb wieloklientowy z `client_id`):**
 
 ```
-.ai-kb/pipeline-runs/
+.ai-kb/clients/<client_id>/pipeline-runs/
   <run_id>/
     manifest.yaml              # indeks stacji, statusy, ścieżka, iteracje bramki
     stan_00_inicjuj.yaml       # checkpoint po stacji inicjuj
@@ -216,6 +217,8 @@ Po zakończeniu każdej stacji merytorycznej koperta jest zapisywana do pliku ch
     stan_02_analiza.yaml
     ...
 ```
+
+Tryb legacy (brak `client_id`): `.ai-kb/pipeline-runs/<run_id>/` (kompatybilność wstecz).
 
 **Manifest:**
 
@@ -242,7 +245,7 @@ MANIFEST:
 
 ### Zasady checkpointowania
 
-1. **Tworzenie run:** stacja `inicjuj` tworzy katalog `.ai-kb/pipeline-runs/<run_id>/` i plik `manifest.yaml` z pustym stanem stacji.
+1. **Tworzenie run:** stacja `inicjuj` tworzy katalog `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i plik `manifest.yaml` z pustym stanem stacji.
 2. **Zapis po stacji:** po zakończeniu każdej stacji merytorycznej zapisz kopertę do `stan_<NN>_<stacja>.yaml` i zaktualizuj `manifest.yaml` (status `zakonczona`, timestamp, nazwa checkpointu).
 3. **Aktualizacja statusu:** przed rozpoczęciem stacji ustaw jej status na `w_trakcie` w manifeście. Po zakończeniu na `zakonczona`. Przy blokadzie na `zablokowana`.
 4. **Restart od stacji:** przy restarcie odczytaj `manifest.yaml`, zidentyfikuj ostatnią stację `zakonczona`, odczytaj jej checkpoint i kontynuuj od stacji następnej. Skilla `monitoruj` użyj do raportowania statusu restartu.
@@ -301,7 +304,7 @@ Każdy skill ma jednoznaczną rolę. Nie dubluj ról:
 - **Zbyt wąska ścieżka:** jeśli w trakcie realizacji okaże się, że problem jest złożony, wróć do `inicjuj` i przeklasyfikuj.
 - **Utrata kontekstu:** w ścieżce `dogłębny` (10+ stacji) kontekst konwersacji może przekroczyć okno modelu. Rozwiązane przez kopertę z kompresją (patrz "Mechanizm wymiany danych") - starsze sekcje `pola_stacji` można usunąć z kontekstu po zapisie checkpointu.
 - **Brak walidacji wyjścia:** rozwiązane przez sekcję `walidacja` w kopercie - każda stacja sprawdza `pola_wymagane` vs `pola_obecne` przed przejściem dalej.
-- **Brak checkpointowania:** rozwiązane przez checkpointowanie plikowe w `.ai-kb/pipeline-runs/<run_id>/` - przerwanie umożliwia restart od ostatniej stacji `zakonczona` w manifeście.
+- **Brak checkpointowania:** rozwiązane przez checkpointowanie plikowe w `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) - przerwanie umożliwia restart od ostatniej stacji `zakonczona` w manifeście.
 
 ## Zapis do bazy wiedzy
 

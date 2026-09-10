@@ -108,12 +108,13 @@ Po zakończeniu pracy emituj kopertę z:
 - `walidacja.stacja_docelowa: weryfikacja`,
 - `walidacja.pola_wymagane: [TWIERDZENIE LUB ZBIOR TWIERDZEN]` -> wnioskowane z `zmiany` (każda zmiana implikuje twierdzenie do weryfikacji),
 - `relacje`:
-  - `stacja:realizuj` -> `stacja:weryfikacja` (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:realizuj` (typ: `zawiera`),
-  - `stacja:realizuj` -> `zmiana:Z1`, `zmiana:Z2`, ... (typ: `wyprodukowala`, per zmiana),
+  - `stacja:<client_id>:<run_id>:realizuj` -> `stacja:<client_id>:<run_id>:weryfikacja` (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:realizuj` (typ: `zawiera`),
+  - `stacja:<client_id>:<run_id>:realizuj` -> `zmiana:Z1`, `zmiana:Z2`, ... (typ: `wyprodukowala`, per zmiana),
   - `zmiana:Z1` -> `krok:K1` (typ: `realizuje`, per zmiana realizująca krok planu).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_07_realizuj.yaml` i zaktualizuj manifest.
+Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_07_realizuj.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest.
 
 ## Instrukcja główna
 

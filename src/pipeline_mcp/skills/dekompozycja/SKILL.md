@@ -104,12 +104,13 @@ Po zakończeniu pracy emituj kopertę z:
 - `walidacja.stacja_docelowa: dobierz`,
 - `walidacja.pola_wymagane: [CEL DOBORU]` -> wnioskowane z `podproblemy`,
 - `relacje`:
-  - `stacja:dekompozycja` -> `stacja:dobierz` (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:dekompozycja` (typ: `zawiera`),
-  - `stacja:dekompozycja` -> `podproblem:P1`, `podproblem:P2`, ... (typ: `wyprodukowala`, per podproblem),
+  - `stacja:<client_id>:<run_id>:dekompozycja` -> `stacja:<client_id>:<run_id>:dobierz` (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:dekompozycja` (typ: `zawiera`),
+  - `stacja:<client_id>:<run_id>:dekompozycja` -> `podproblem:P1`, `podproblem:P2`, ... (typ: `wyprodukowala`, per podproblem),
   - `podproblem:P1` -> `podproblem:P2` (typ: `zalezy_od`, per zależność z `zaleznosci{}`).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_03_dekompozycja.yaml` i zaktualizuj manifest.
+Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_03_dekompozycja.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest.
 
 ## Instrukcja główna
 

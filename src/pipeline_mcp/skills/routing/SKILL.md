@@ -99,10 +99,11 @@ Po zakończeniu pracy emituj kopertę z:
 - `walidacja.stacja_docelowa: planuj`,
 - `walidacja.pola_wymagane: [CEL DO ZAPLANOWANIA]` -> z `pola_stacji.dobierz.rekomendacja` (wnioskowane),
 - `relacje`:
-  - `stacja:routing` -> `stacja:planuj` (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:routing` (typ: `zawiera`).
+  - `stacja:<client_id>:<run_id>:routing` -> `stacja:<client_id>:<run_id>:planuj` (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:routing` (typ: `zawiera`).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_05_routing.yaml` i zaktualizuj manifest.
+Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_05_routing.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest.
 
 ## Instrukcja główna
 

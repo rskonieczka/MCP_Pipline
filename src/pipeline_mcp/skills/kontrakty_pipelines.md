@@ -278,23 +278,25 @@ Oprócz pól kontraktowych mapowanych powyżej, koperta zawiera sekcję `relacje
 
 | Stacja źródłowa | Encje źródłowe | Encje docelowe | Typ relacji | Opis |
 | --- | --- | --- | --- | --- |
-| `inicjuj` | `stacja:inicjuj` | `stacja:zmienne` | `nastapila_po` | Kolejność stacji |
-| `inicjuj` | `run:<run_id>` | `stacja:inicjuj` | `zawiera` | Run zawiera stację |
-| `zmienne` | `stacja:zmienne` | `zmienna:V001...` | `wyprodukowala` | Stacja produkuje zmienne |
+| `inicjuj` | `stacja:<client_id>:<run_id>:inicjuj` | `stacja:<client_id>:<run_id>:zmienne` | `nastapila_po` | Kolejność stacji |
+| `inicjuj` | `run:<client_id>:<run_id>` | `stacja:<client_id>:<run_id>:inicjuj` | `zawiera` | Run zawiera stację |
+| `zmienne` | `stacja:<client_id>:<run_id>:zmienne` | `zmienna:V001...` | `wyprodukowala` | Stacja produkuje zmienne |
 | `zmienne` | `zmienna:V001` | `zmienna:V003` | `zalezy_od` | Zależność między zmiennymi |
-| `dekompozycja` | `stacja:dekompozycja` | `podproblem:P1...` | `wyprodukowala` | Stacja produkuje podproblemy |
+| `dekompozycja` | `stacja:<client_id>:<run_id>:dekompozycja` | `podproblem:P1...` | `wyprodukowala` | Stacja produkuje podproblemy |
 | `dekompozycja` | `podproblem:P1` | `podproblem:P2` | `zalezy_od` | Zależność między podproblemami |
-| `dobierz` | `stacja:dobierz` | `decyzja:D001` | `wyprodukowala` | Stacja produkuje decyzję |
+| `dobierz` | `stacja:<client_id>:<run_id>:dobierz` | `decyzja:D001` | `wyprodukowala` | Stacja produkuje decyzję |
 | `dobierz` | `decyzja:D001` | `zmienna:V001` | `oparta_na` | Decyzja oparta na zmiennej |
-| `planuj` | `stacja:planuj` | `krok:K1...` | `wyprodukowala` | Stacja produkuje kroki planu |
+| `planuj` | `stacja:<client_id>:<run_id>:planuj` | `krok:K1...` | `wyprodukowala` | Stacja produkuje kroki planu |
 | `planuj` | `krok:K1` | `podproblem:P1` | `rozwiazuje` | Krok rozwiązuje podproblem |
-| `realizuj` | `stacja:realizuj` | `zmiana:Z1...` | `wyprodukowala` | Stacja produkuje zmiany |
+| `realizuj` | `stacja:<client_id>:<run_id>:realizuj` | `zmiana:Z1...` | `wyprodukowala` | Stacja produkuje zmiany |
 | `realizuj` | `zmiana:Z1` | `krok:K1` | `realizuje` | Zmiana realizuje krok planu |
-| `weryfikacja` | `stacja:weryfikacja` | `twierdzenie:T1...`, `werdykt:W1...` | `wyprodukowala` | Stacja produkuje twierdzenia i werdykty |
+| `weryfikacja` | `stacja:<client_id>:<run_id>:weryfikacja` | `twierdzenie:T1...`, `werdykt:W1...` | `wyprodukowala` | Stacja produkuje twierdzenia i werdykty |
 | `weryfikacja` | `werdykt:W1` | `twierdzenie:T1` | `dotyczy` | Werdykt dotyczy twierdzenia |
-| `sprawdzenie` | `stacja:sprawdzenie` | `wymiar:WA1...` | `wyprodukowala` | Stacja produkuje wymiary audytu |
+| `sprawdzenie` | `stacja:<client_id>:<run_id>:sprawdzenie` | `wymiar:WA1...` | `wyprodukowala` | Stacja produkuje wymiary audytu |
 | `sprawdzenie` | `wymiar:WA1` | `zmiana:Z1` | `weryfikuje` | Wymiar weryfikuje zmianę |
-| `ewaluacja` | `stacja:ewaluacja` | `wniosek:WN1...` | `wyprodukowala` | Stacja produkuje wnioski |
-| `ewaluacja` | `wniosek:WN1` | `stacja:ewaluacja` | `wyprowadzony_z` | Wniosek wyprowadzony ze stacji |
+| `ewaluacja` | `stacja:<client_id>:<run_id>:ewaluacja` | `wniosek:WN1...` | `wyprodukowala` | Stacja produkuje wnioski |
+| `ewaluacja` | `wniosek:WN1` | `stacja:<client_id>:<run_id>:ewaluacja` | `wyprowadzony_z` | Wniosek wyprowadzony ze stacji |
+
+Node IDs w trybie legacy (brak `client_id`) nie zawierają prefiksu `client_id` (np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`).
 
 Mapowanie typów relacji (wartości w kopercie) na etykiety krawędzi w Memgraph: patrz `_shared/graf-pipeline.md` (sekcja "Schemat krawędzi").

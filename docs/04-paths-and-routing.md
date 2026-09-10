@@ -121,7 +121,7 @@ stacje_poglebione: []
 Serwer implementuje logike routing'u w `routing.py`:
 
 ```python
-def determine_path(klasyfikacja: str, stawka: str, ryzyko: str) -> str:
+def determine_path(klasyfikacja: str, stawka: str = "", ryzyko: str = "") -> str:
     if klasyfikacja == "trywialne":
         return "szybki"
     elif klasyfikacja == "rutynowe":
@@ -130,6 +130,8 @@ def determine_path(klasyfikacja: str, stawka: str, ryzyko: str) -> str:
         return "pelny"
     elif klasyfikacja == "zlozone":
         return "doglebny"
+    # Default
+    return "pelny"
 
 def get_station_sequence(path: str) -> list[str]:
     PATHS = {
@@ -145,7 +147,15 @@ def get_station_sequence(path: str) -> list[str]:
 
 def get_next_station(current: str, path: str, gate_status: str = "") -> str | None:
     sequence = get_station_sequence(path)
-    idx = sequence.index(current)
+    try:
+        idx = sequence.index(current)
+    except ValueError:
+        # Stacja nie w sciezce - szukaj nastepnej po niej w ALL_STATIONS
+        all_idx = ALL_STATIONS.index(current)
+        for s in sequence:
+            if ALL_STATIONS.index(s) > all_idx:
+                return s
+        return None
     if idx + 1 >= len(sequence):
         return None  # ostatnia stacja
     return sequence[idx + 1]

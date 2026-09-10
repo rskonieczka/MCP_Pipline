@@ -4,8 +4,10 @@ Checkpointowanie umozliwia restart pipeline od dowolnej stacji oraz kompresje ko
 
 ## 1. Struktura katalogow
 
+Tryb wieloklientowy (z `client_id`):
+
 ```
-.ai-kb/pipeline-runs/
+.ai-kb/clients/<client_id>/pipeline-runs/
   <run_id>/
     manifest.yaml              # indeks stacji, statusy, sciezka, iteracja bramki
     stan_inicjuj.yaml       # checkpoint po inicjuj
@@ -20,11 +22,13 @@ Checkpointowanie umozliwia restart pipeline od dowolnej stacji oraz kompresje ko
     stan_realizuj.yaml
     stan_weryfikacja.yaml
     stan_sprawdzenie.yaml
-    stan_10_ewaluacja.yaml     # tylko sciezka doglebny
-    stan_11_utrwal.yaml
-    stan_12_monitoruj.yaml     # tylko sciezka doglebny
+    stan_ewaluacja.yaml     # tylko sciezka doglebny
+    stan_utrwal.yaml
+    stan_monitoruj.yaml     # tylko sciezka doglebny
     envelope_final.yaml        # ostateczna koperta po zamknieciu
 ```
+
+Tryb legacy (brak `client_id`): `.ai-kb/pipeline-runs/<run_id>/` (kompatybilnosc wstecz).
 
 ## 2. Manifest
 
@@ -35,6 +39,10 @@ MANIFEST:
   sciezka: szybki | pelny | doglebny
   iteracja_bramki: 0
   status_runu: w_trakcie | zakonczony | zablokowany
+  client_id: ""               # identyfikator klienta (pusty = legacy)
+  timestamp_start: "2026-06-29T14:32:00"
+  timestamp_end: null
+  historia_bramki: []         # U4: historia iteracji bramki
   stacje:
     - stacja: inicjuj
       status: zakonczona           # zakonczona | w_trakcie | zablokowana | pominieta
@@ -54,7 +62,7 @@ MANIFEST:
 
 ### 3.1. Tworzenie run
 
-Stacja `inicjuj` tworzy katalog `.ai-kb/pipeline-runs/<run_id>/` i plik `manifest.yaml` z pustym stanem stacji. Serwer wykonuje to w narzedziu `start_run`.
+Stacja `inicjuj` tworzy katalog `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i plik `manifest.yaml` z pustym stanem stacji. Serwer wykonuje to w narzedziu `start_run`.
 
 ### 3.2. Zapis po stacji
 
@@ -155,51 +163,92 @@ import yaml
 from pathlib import Path
 from .models import Envelope
 
-def save_checkpoint(run_id: str, station: str, envelope: Envelope,
-                    suffix: str = "") -> str:
-    runs_dir = get_runs_dir()
-    checkpoint_dir = runs_dir / run_id
-    checkpoint_path = checkpoint_dir / f"stan_{NN}_{station}{suffix}.yaml"
-    with open(checkpoint_path, "w") as f:
-        yaml.dump(envelope.model_dump(), f, allow_unicode=True)
+def save_checkpoint(
+    run_id: str, station: str, envelope: Envelope, suffix: str = "",
+    workspace: str | None = None, client_id: str = ""
+) -> str:
+    config = get_config()
+    checkpoint_path = config.checkpoint_path(run_id, station, suffix, workspace, client_id)
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    data = envelope.model_dump()
+    data["_checkpoint"] = {
+        "station": station, "suffix": suffix,
+        "timestamp": datetime.now().isoformat(),
+    }
+    with open(checkpoint_path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
     return str(checkpoint_path)
 
-def load_checkpoint(run_id: str, station: str, suffix: str = "") -> Envelope:
-    checkpoint_path = find_checkpoint(run_id, station, suffix)
-    with open(checkpoint_path) as f:
+def load_checkpoint(
+    run_id: str, station: str, suffix: str = "",
+    workspace: str | None = None, client_id: str = ""
+) -> Envelope:
+    config = get_config()
+    checkpoint_path = config.checkpoint_path(run_id, station, suffix, workspace, client_id)
+    with open(checkpoint_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
+    data.pop("_checkpoint", None)
     return Envelope(**data)
 
-def list_checkpoints(run_id: str) -> list[dict]:
-    checkpoint_dir = get_runs_dir() / run_id
-    return [
-        {"station": parse_station(f.name),
-         "checkpoint_path": str(f),
-         "timestamp": f.stat().st_mtime,
-         "suffix": parse_suffix(f.name),
-         "size_bytes": f.stat().st_size}
-        for f in sorted(checkpoint_dir.glob("stan_*.yaml"))
-    ]
+def list_checkpoints(
+    run_id: str, workspace: str | None = None, client_id: str = ""
+) -> list[dict]:
+    config = get_config()
+    run_dir = config.run_dir(run_id, workspace, client_id)
+    if not run_dir.exists():
+        return []
+    checkpoints = []
+    for f in sorted(run_dir.glob("stan_*.yaml")):
+        stat = f.stat()
+        name = f.stem.replace("stan_", "", 1)
+        if "_iter" in name:
+            station, iter_part = name.rsplit("_iter", 1)
+            suffix = f"_iter{iter_part}"
+        else:
+            station, suffix = name, ""
+        checkpoints.append({
+            "station": station, "checkpoint_path": str(f),
+            "timestamp": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "suffix": suffix, "size_bytes": stat.st_size,
+        })
+    return checkpoints
 
-def get_latest_checkpoint(run_id: str) -> tuple[str, Envelope]:
-    checkpoints = list_checkpoints(run_id)
+def get_latest_checkpoint(
+    run_id: str, workspace: str | None = None, client_id: str = ""
+) -> tuple[str, Envelope] | None:
+    # Uzywa manifestu do ustalenia ostatniej zakonczonej stacji (chronologicznie)
+    from .manifest import load_manifest
+    config = get_config()
+    manifest_path = config.manifest_path(run_id, workspace, client_id)
+    if manifest_path.exists():
+        manifest = load_manifest(manifest_path)
+        for s in reversed(manifest.stacje):
+            if s.status == "zakonczona" and s.checkpoint:
+                cp_path = Path(s.checkpoint)
+                if cp_path.exists():
+                    return s.stacja, _load_envelope_file(cp_path)
+    # Fallback: sortuj po timestamp pliku (mtime)
+    checkpoints = list_checkpoints(run_id, workspace, client_id)
     if not checkpoints:
-        raise CheckpointNotFoundError(run_id)
-    latest = checkpoints[-1]
-    return latest["station"], load_checkpoint(run_id, latest["station"])
+        return None
+    main_checkpoints = [c for c in checkpoints if not c["suffix"]] or checkpoints
+    main_checkpoints.sort(key=lambda c: c["timestamp"])
+    latest = main_checkpoints[-1]
+    envelope = load_checkpoint(run_id, latest["station"], latest["suffix"], workspace, client_id)
+    return latest["station"], envelope
 ```
 
 ## 6. Narzedzia MCP
 
-### save_checkpoint
+### save_checkpoint_tool
 
 Ręczny zapis checkpointu (normalnie wywolywane automatycznie przez `execute_station`).
 
-### load_checkpoint
+### load_checkpoint_tool
 
 Odczyt checkpointu stacji. Zwraca koperte z checkpointu.
 
-### list_checkpoints
+### list_checkpoints_tool
 
 Lista wszystkich checkpointow dla run'u z metadanymi (rozmiar, timestamp, suffix).
 

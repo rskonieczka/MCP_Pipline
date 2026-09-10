@@ -114,10 +114,11 @@ Po zakończeniu pracy emituj kopertę z:
 - `walidacja.stacja_docelowa: dekompozycja` (lub `dobierz` gdy pominięto dekompozycję),
 - `walidacja.pola_wymagane: [PROBLEM LUB CEL ZŁOŻONY]` -> wnioskowane z `wnioski` + `ograniczenia` (`agent_inference`),
 - `relacje`:
-  - `stacja:analiza` -> `stacja:dekompozycja` (lub `stacja:dobierz`) (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:analiza` (typ: `zawiera`).
+  - `stacja:<client_id>:<run_id>:analiza` -> `stacja:<client_id>:<run_id>:dekompozycja` (lub `stacja:<client_id>:<run_id>:dobierz`) (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:analiza` (typ: `zawiera`).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_02_analiza.yaml` i zaktualizuj manifest.
+Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_02_analiza.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest.
 
 ## Instrukcja główna
 

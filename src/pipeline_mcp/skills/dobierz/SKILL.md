@@ -157,12 +157,13 @@ Po zakończeniu pracy emituj kopertę z:
 - `walidacja.stacja_docelowa: routing` (lub `planuj` gdy pominięto routing),
 - `walidacja.pola_wymagane: [ZAMIAR LUB PROBLEM]` -> z `stan.zamiar` (kontekstowe),
 - `relacje`:
-  - `stacja:dobierz` -> `stacja:routing` (lub `stacja:planuj`) (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:dobierz` (typ: `zawiera`),
-  - `stacja:dobierz` -> `decyzja:D001` (typ: `wyprodukowala`, dla rekomendacji),
+  - `stacja:<client_id>:<run_id>:dobierz` -> `stacja:<client_id>:<run_id>:routing` (lub `stacja:<client_id>:<run_id>:planuj`) (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:dobierz` (typ: `zawiera`),
+  - `stacja:<client_id>:<run_id>:dobierz` -> `decyzja:D001` (typ: `wyprodukowala`, dla rekomendacji),
   - `decyzja:D001` -> `zmienna:V001`, ... (typ: `oparta_na`, per zmienna użyta w uzasadnieniu rekomendacji).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_04_dobierz.yaml` i zaktualizuj manifest.
+Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_04_dobierz.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest.
 
 ## Analiza pojęciowa doboru
 

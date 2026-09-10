@@ -41,30 +41,42 @@ Serwer jest w pelni self-contained wzgledem skilli:
 
 ## 4. Ladowanie skilli
 
-`skills_loader.py` ladowane sa przez `importlib.resources`:
+`skills_loader.py` ladowane sa przez `importlib.resources` (sciezka z `__file__`):
 
 ```python
-import importlib.resources
+from pathlib import Path
 import yaml
+from .stations import STATION_TO_SKILL_DIR, STATIONS
+
+def _get_skills_dir() -> Path:
+    """Zwraca sciezke katalogu wbudowanych skilli."""
+    return Path(__file__).parent / "skills"
 
 def load_skill(station_name: str) -> dict:
-    """Ladowanie wbudowanego skilla stacji z pakietu."""
-    skill_dir = f"skills.{station_name.replace('-', '_')}"
-    try:
-        skill_text = importlib.resources.files(
-            f"pipeline_mcp.{skill_dir}"
-        ).joinpath("SKILL.md").read_text(encoding="utf-8")
-    except FileNotFoundError:
+    """Ladowanie wbudowanego skilla stacji z pakietu.
+
+    Uzywa mapowania STATION_TO_SKILL_DIR do przeksztalcenia nazwy stacji
+    na nazwe katalogu skilla (np. 'inicjuj' -> 'inicjuj-run',
+    'audyt_runu' -> 'audyt-runu').
+    """
+    skill_dir_name = STATION_TO_SKILL_DIR.get(station_name)
+    if skill_dir_name is None:
         raise SkillNotFoundError(station_name)
 
+    skill_path = _get_skills_dir() / skill_dir_name / "SKILL.md"
+    if not skill_path.exists():
+        raise SkillNotFoundError(station_name)
+
+    skill_text = skill_path.read_text(encoding="utf-8")
+
     # Parsuj frontmatter
+    frontmatter = {}
+    content = skill_text
     if skill_text.startswith("---"):
         parts = skill_text.split("---", 2)
-        frontmatter = yaml.safe_load(parts[1])
-        content = parts[2].strip()
-    else:
-        frontmatter = {}
-        content = skill_text
+        if len(parts) >= 3:
+            frontmatter = yaml.safe_load(parts[1]) or {}
+            content = parts[2].strip()
 
     return {
         "name": frontmatter.get("name", station_name),
@@ -74,12 +86,14 @@ def load_skill(station_name: str) -> dict:
         "frontmatter": frontmatter
     }
 
-def get_skill_prompt(station_name: str, envelope: dict) -> str:
+def get_skill_prompt(station_name: str, envelope_dict: dict | None = None) -> str:
     """Budowanie promptu dla stacji z wstrzyknieciem koperty."""
     skill = load_skill(station_name)
-    envelope_yaml = yaml.dump(envelope, allow_unicode=True)
-
-    return f"""{skill["content"]}
+    skill_prompt = skill["content"]
+    if envelope_dict:
+        envelope_yaml = yaml.dump(envelope_dict, allow_unicode=True,
+                                   default_flow_style=False, sort_keys=False)
+        return f"""{skill_prompt}
 
 ---
 
@@ -89,15 +103,14 @@ AKTUALNA KOPERTA RUN'U:
 WYKONAJ STACJE '{station_name}' NA PODSTAWIE POWYZSZEGO SKILLA I KOPERTY.
 ZWROC WYJSCIE STACJI ORAZ ZAKONCZ BLOKIEM KOPERTA ZAKTUALIZOWANYM O TWOJE WYJSCIE.
 """
+    return skill_prompt
 
 def list_available_skills() -> list[str]:
-    """Lista dostepnych wbudowanych skilli."""
-    return [
-        "inicjuj", "zmienne", "analiza", "dekompozycja",
-        "dobierz", "routing", "planuj", "realizuj",
-        "weryfikacja", "sprawdzenie", "ewaluacja",
-        "utrwal", "monitoruj", "audyt-runu"
-    ]
+    """Lista dostepnych wbudowanych skilli (nazwy stacji, nie katalogi)."""
+    return list(STATIONS.keys())
+    # ["inicjuj", "zmienne", "analiza", "dekompozycja", "dobierz", "routing",
+    #  "planuj", "realizuj", "weryfikacja", "sprawdzenie", "ewaluacja",
+    #  "utrwal", "monitoruj", "audyt_runu"]
 ```
 
 ## 5. Kontrakty I/O (wbudowane)

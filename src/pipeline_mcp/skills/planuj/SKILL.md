@@ -120,12 +120,13 @@ Po zakończeniu pracy emituj kopertę z:
 - `walidacja.stacja_docelowa: realizuj`,
 - `walidacja.pola_wymagane: [PLAN DO ZREALIZOWANIA]` -> z `pola_stacji.planuj.plan` (bezpośrednie),
 - `relacje`:
-  - `stacja:planuj` -> `stacja:realizuj` (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:planuj` (typ: `zawiera`),
-  - `stacja:planuj` -> `krok:K1`, `krok:K2`, ... (typ: `wyprodukowala`, per krok planu),
+  - `stacja:<client_id>:<run_id>:planuj` -> `stacja:<client_id>:<run_id>:realizuj` (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:planuj` (typ: `zawiera`),
+  - `stacja:<client_id>:<run_id>:planuj` -> `krok:K1`, `krok:K2`, ... (typ: `wyprodukowala`, per krok planu),
   - `krok:K1` -> `podproblem:P1` (typ: `rozwiazuje`, per krok rozwiązujący podproblem).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_06_planuj.yaml` i zaktualizuj manifest.
+Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_06_planuj.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest.
 
 ## Instrukcja główna
 

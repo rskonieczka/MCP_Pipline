@@ -171,3 +171,39 @@ ID wezlow grafu (`run:<run_id>`, `stacja:<run_id>:<station>`, `wymaganie:<run_id
 ### P26: close_run_node i write_relations_from_envelope bez client_id (F7, naprawione 2026-09-10)
 
 `close_run_node` nie przyjmowalo `client_id` - MERGE dopasowywalo wezel niezaleznie od klienta. `write_relations_from_envelope` przekazywalo `rel.zrodlo`/`rel.cel` z koperty, ktore nie zawieraly `client_id`. Powiazane z P20 - po dodaniu `client_id` do ID wezlow, te funkcje musialy tez go przekazywac. Naprawa: `close_run_node` przyjmuje `client_id` (wywolanie w `server.py` przekazuje `manifest.client_id`), `add_station_relations` w `envelope.py` konstruuje node IDs z `envelope.client_id` przez helpery.
+
+### P27: Dlug dokumentacyjny - audyt 2026-09-10 (naprawione)
+
+Pelny audyt dokumentacji (`docs/`, `README.md`) wykryl 30 pozycji dlugu dokumentacyjnego wzgledem kodu. Najkrytyczniejsze kategorie:
+
+1. **Bledne sygnatury funkcji**: `evaluate_gate` brakowalo parametru `manifest`; `register_client` mial `nip`/`external_id` zamiast `external_ids`/`id_fragments`; `save_shared_knowledge` mial zla kolejnosc i brak `source`/`tags`; `get_shared_knowledge` brakowalo wymaganego `category`; `create_envelope` brakowalo `sciezka`/`client_id`.
+
+2. **Nieistniejace funkcje w dokumentacji**: `quality_gate.py` opisywal `loop_back`/`escalate`/`can_loop` (nie istnieja); `client_registry.py` opisywal `unarchive_client` (nie istnieje); `envelope.py` brakowalo `add_station_relations`/`get_envelope_summary`.
+
+3. **Bledne nazwy narzedzi MCP**: `save_checkpoint`/`load_checkpoint`/`list_checkpoints` zamiast `save_checkpoint_tool`/`load_checkpoint_tool`/`list_checkpoints_tool`.
+
+4. **Brakujace narzedzia**: `list_stations`, `verify_integrity`, `get_shared_memory`.
+
+5. **Brakujace pola modeli**: `Envelope` brakowalo `wejscie`/`client_id`/`timestamp`; `RTMEntry` brakowalo `stacja_niespelnienia` (U6); `Manifest` brakowalo `historia_bramki`/`client_id`; brak modeli `GateHistoryEntry`/`ClientContext`/`ClientMatch`/`ResolveResult`/`ClientMemoryEntry`/`SharedKnowledgeEntry`/`Stan`.
+
+6. **Bledne struktury zwrotne**: `resolve_client` zwraca `ResolveResult` z lista matches (nie pojedynczy wynik); `set_active_client`/`get_active_client` zwracaja inne pola; `get_gate_iterations` mial `checkpoint` zamiast `gate_decision`; `delete_client` brakowalo `rag_deleted`/`memory_deleted`/`memgraph_deleted`.
+
+7. **Nieaktualny parser LLM**: `parse_llm_output` regex nie odzwierciedlal P19 (tolerancyjny parser z `re.DOTALL` i auto-indentacja).
+
+8. **Brak limitu auto-pilota**: `_AUTO_PILOT_MAX_STEPS = 40` nie byl udokumentowany.
+
+9. **Numeracja sekcji**: `docs/02-tools-reference.md` mial `6b` zamiast `7`, brak sekcji `7`, skok `6b`->`8`.
+
+10. **Brakujace kody bledow**: `SKILL_NOT_FOUND`/`LLM_OUTPUT_PARSE_ERROR`/`AMBIGUOUS_CLIENT`/`CLIENT_ID_MISMATCH`.
+
+11. **README**: mowil o 6 grupach narzedzi (jest 11); brak `docs/10-stations-builtin.md` w tabeli; diagram nie odzwierciedlal multi-tenant.
+
+12. **Checkpointing**: wszystkie funkcje brakowalo parametrow `workspace`/`client_id`.
+
+13. **`get_post_gate_station`**: dokumentacja miala fallback `"utrwal"`, kod zwraca `None` dla sciezki szybkiej.
+
+14. **`infer_loop_target`**: brakowalo parametru `sciezka`.
+
+15. **`list_available_skills`**: zwraca nazwy stacji (`audyt_runu` z podkresleniem), nie katalogi (`audyt-runu` z myslnikiem); `load_skill` uzywa `STATION_TO_SKILL_DIR`, nie `replace('-', '_')`.
+
+Naprawa: edycja 9 plikow (`README.md`, `docs/01-architecture.md`, `docs/02-tools-reference.md`, `docs/03-envelope-spec.md`, `docs/04-paths-and-routing.md`, `docs/05-quality-gate.md`, `docs/06-checkpointing.md`, `docs/07-auto-pilot.md`, `docs/10-stations-builtin.md`). Zasada minimalnej zmiany - aktualizacja istniejacych plikow, bez tworzenia nowych.

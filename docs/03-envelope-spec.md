@@ -117,9 +117,16 @@ KOPERTA:
       zrodlo: "zmiar"         # zrodlo: zamiar | zmienne | kontekst | zrodla | agent_inference
       stacje_adresujace: ["zmienne"]  # stacje odpowiedzialne za to wymaganie
       stacja_weryfikujaca: "weryfikacja"  # stacja weryfikujaca
+      stacja_niespelnienia: ""    # stacja, ktora oznaczyla wymaganie jako niespelnione (U6)
       status: "adresowane"    # nieadresowane | adresowane | zrealizowane | weryfikowane | niespelnione
       artefakty: []           # linki do wyjsc stacji (pola_stacji.<stacja>.<pole>)
       checkpoint_weryfikacji: ""  # ktory checkpoint potwierdza
+  wejscie:                    # wejscie uzytkownika z start_run (U8)
+    kontekst: ""
+    zrodla: []
+    tryb_inicjacji: ""
+  client_id: ""               # identyfikator klienta (pusty = tryb legacy)
+  timestamp: ""               # timestamp ostatniej aktualizacji
 ```
 
 ## 2. Zasady koperty
@@ -206,6 +213,9 @@ class Envelope(BaseModel):
     walidacja: Walidacja
     relacje: list[Relacja]
     rtm: list[RTMEntry]            # Requirements Traceability Matrix
+    wejscie: dict                  # wejscie uzytkownika z start_run (U8)
+    client_id: str                 # identyfikator klienta (pusty = legacy)
+    timestamp: str                 # timestamp ostatniej aktualizacji
 ```
 
 Model `RTMEntry` w `models.py`:
@@ -217,6 +227,7 @@ class RTMEntry(BaseModel):
     zrodlo: str = "zamiar"         # zrodlo pochodzenia
     stacje_adresujace: list[str]   # stacje odpowiedzialne za adresowanie
     stacja_weryfikujaca: str = ""  # stacja weryfikujaca
+    stacja_niespelnienia: str = "" # stacja oznaczajaca niespelnienie (U6, nie nadpisuje stacja_weryfikujaca)
     status: RTMStatus = "nieadresowane"  # status sledzenia
     artefakty: list[str]           # linki do artefaktow (pola_stacji.<stacja>.<pole>)
     checkpoint_weryfikacji: str = ""  # checkpoint potwierdzajacy
@@ -225,7 +236,7 @@ class RTMEntry(BaseModel):
 Statusy `RTMStatus`: `nieadresowane` -> `adresowane` -> `zrealizowane` -> `weryfikowane` / `niespelnione`.
 
 Operacje na kopercie w `envelope.py`:
-- `create_envelope(run_id, zamiar)` - inicjalna koperta
+- `create_envelope(run_id, zamiar, sciezka, client_id)` - inicjalna koperta
 - `update_station_fields(envelope, station, output)` - aktualizacja `pola_stacji.<station>`
 - `accumulate_state(envelope, station, output)` - kumulacja pol w `stan`
 - `validate_transition(envelope, target_station)` - walidacja przed przejsciem

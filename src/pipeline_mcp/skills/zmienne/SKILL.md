@@ -99,12 +99,13 @@ Po zakończeniu pracy emituj kopertę z:
 - `walidacja.stacja_docelowa: analiza`,
 - `walidacja.pola_wymagane: [NAZWA OBIEKTU]` -> sprawdź `pola_stacji.zmienne.analysis_object.name`,
 - `relacje`: lista relacji między encjami wyprodukowanymi przez `zmienne`:
-  - `stacja:zmienne` -> `stacja:analiza` (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:zmienne` (typ: `zawiera`),
-  - `stacja:zmienne` -> `zmienna:V001`, `zmienna:V002`, ... (typ: `wyprodukowala`, per zmienna),
+  - `stacja:<client_id>:<run_id>:zmienne` -> `stacja:<client_id>:<run_id>:analiza` (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:zmienne` (typ: `zawiera`),
+  - `stacja:<client_id>:<run_id>:zmienne` -> `zmienna:V001`, `zmienna:V002`, ... (typ: `wyprodukowala`, per zmienna),
   - `zmienna:V001` -> `zmienna:V003` (typ: `zalezy_od`, per relacja z `relations[]`).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_01_zmienne.yaml` i zaktualizuj manifest (patrz `utrwal/SKILL.md` - "Checkpoint po stacji").
+Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_01_zmienne.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest (patrz `utrwal/SKILL.md` - "Checkpoint po stacji").
 
 ## 4. Minimalne dane wejściowe
 

@@ -27,7 +27,8 @@ Zmaterializowanie pipeline'u umiejetnosci (13 stacji: inicjuj, zmienne, analiza,
            +-------------+-------------+
                          |
                     [Persystencja]
-                    .ai-kb/pipeline-runs/
+                    .ai-kb/clients/<client_id>/pipeline-runs/
+                    (legacy: .ai-kb/pipeline-runs/)
                          |
               +----------+----------+
               |                     |
@@ -36,14 +37,21 @@ Zmaterializowanie pipeline'u umiejetnosci (13 stacji: inicjuj, zmienne, analiza,
           checkpointy)
 ```
 
-Serwer wystawia narzedzia MCP podzielone na 6 grup:
+Serwer wystawia narzedzia MCP podzielone na 11 grup:
 
 1. **Run management** - `start_run`, `get_run_status`, `list_runs`, `resume_run`, `close_run`
 2. **Station execution** - `execute_station`, `get_next_station`, `skip_station`, `get_station_contract`
 3. **Envelope management** - `get_envelope`, `update_envelope`, `validate_contract`
 4. **Quality gate** - `quality_gate`, `get_gate_iterations`
-5. **Checkpointing** - `save_checkpoint`, `load_checkpoint`, `list_checkpoints`
+5. **Checkpointing** - `save_checkpoint_tool`, `load_checkpoint_tool`, `list_checkpoints_tool`
 6. **Auto-pilot** - `auto_pilot_start`, `auto_pilot_status`, `auto_pilot_stop`
+7. **RTM (Requirements Traceability Matrix)** - `get_rtm`, `update_rtm`, `add_rtm_entry`, `validate_rtm_coverage`
+8. **Zarzadzanie klientami (multi-tenant)** - `register_client`, `resolve_client`, `set_active_client`, `get_active_client`, `get_client_info`, `list_clients`, `update_client`, `archive_client`, `delete_client`
+9. **Wiedza wspoldzielona** - `save_shared_knowledge`, `get_shared_knowledge`, `search_shared_knowledge`, `list_shared_knowledge`
+10. **Pamiec AI per-klient** - `save_client_memory`, `get_client_memory`, `list_client_memories`, `save_shared_memory`, `get_shared_memory`, `search_client_memories`
+11. **RAG per-klient** - `index_client_document`, `search_client_rag`, `search_shared_rag`, `list_rag_documents`
+
+Dodatkowo narzedzia pomocnicze: `list_stations`, `verify_integrity`.
 
 Szczegolowy opis narzedzi: `docs/02-tools-reference.md`.
 
@@ -171,6 +179,7 @@ Szczegoly konfiguracji: `docs/09-configuration.md`.
 | [docs/07-auto-pilot.md](docs/07-auto-pilot.md) | Tryb auto-pilot z LLM |
 | [docs/08-memgraph-integration.md](docs/08-memgraph-integration.md) | Integracja z Memgraph |
 | [docs/09-configuration.md](docs/09-configuration.md) | Konfiguracja i instalacja |
+| [docs/10-stations-builtin.md](docs/10-stations-builtin.md) | Wbudowane skille stacji |
 
 ## Zrodla prawdy (wbudowane)
 

@@ -146,12 +146,13 @@ Po zakończeniu pracy emituj kopertę z:
 - `walidacja.stacja_docelowa: ewaluacja` (lub `utrwal` w ścieżce pełny, lub `ROZWIĄZANIE` w ścieżce szybki),
 - `walidacja.pola_wymagane` zależne od stacji docelowej,
 - `relacje`:
-  - `stacja:sprawdzenie` -> `stacja:ewaluacja` (lub `stacja:utrwal`) (typ: `nastapila_po`),
-  - `run:<run_id>` -> `stacja:sprawdzenie` (typ: `zawiera`),
-  - `stacja:sprawdzenie` -> `wymiar:WA1`, `wymiar:WA2`, ... (typ: `wyprodukowala`, per wymiar audytu),
+  - `stacja:<client_id>:<run_id>:sprawdzenie` -> `stacja:<client_id>:<run_id>:ewaluacja` (lub `stacja:<client_id>:<run_id>:utrwal`) (typ: `nastapila_po`),
+  - `run:<client_id>:<run_id>` -> `stacja:<client_id>:<run_id>:sprawdzenie` (typ: `zawiera`),
+  - `stacja:<client_id>:<run_id>:sprawdzenie` -> `wymiar:WA1`, `wymiar:WA2`, ... (typ: `wyprodukowala`, per wymiar audytu),
   - `wymiar:WA1` -> `zmiana:Z1` (typ: `weryfikuje`, per wymiar weryfikujący zmianę).
+  - (Node IDs w trybie legacy bez `client_id` nie zawierają prefiksu `client_id`, np. `run:<run_id>` zamiast `run:<client_id>:<run_id>`.)
 
-Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/pipeline-runs/<run_id>/stan_09_sprawdzenie.yaml` i zaktualizuj manifest.
+Po wyemitowaniu koperty zapisz ją do checkpointu `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_09_sprawdzenie.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj manifest.
 
 Jeśli `status_audytu` to `niezgodny`, bramka jakości wraca do `dobierz`/`planuj` (zwiększ `iteracja_bramki` w manifeście, zapisz nowy checkpoint z sufiksem `_iter<N>`, zapisz nową krawędź `NASTAPILA_PO` do Memgraph z adnotacją iteracji).
 

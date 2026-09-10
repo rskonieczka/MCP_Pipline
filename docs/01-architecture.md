@@ -87,45 +87,56 @@ Glowny punkt wejscia. Rejestruje wszystkie narzedzia MCP przez dekoratory FastMC
 
 Modele Pydantic dla struktur danych:
 
-- `Run` - identyfikator run'u, zamiar, sciezka, status, iteracja bramki
-- `Envelope` (Koperta) - run_id, sciezka, stacja_aktualna, stacja_poprzednia, stan, pola_stacji, walidacja, relacje, rtm
-- `RTMEntry` - wpis Requirements Traceability Matrix (req_id, opis, zrodlo, stacje_adresujace, stacja_weryfikujaca, status, artefakty, checkpoint_weryfikacji)
-- `Manifest` - indeks stacji, statusy, timestampy, checkpointy
+- `Run` - identyfikator run'u, zamiar, sciezka, status, iteracja bramki, client_id
+- `Envelope` (Koperta) - run_id, sciezka, stacja_aktualna, stacja_poprzednia, stan, pola_stacji, walidacja, relacje, rtm, wejscie, client_id, timestamp
+- `Stan` - skumulowane pola kluczowe (zamiar, klasyfikacja, punkt_wejscia, client_id)
+- `RTMEntry` - wpis Requirements Traceability Matrix (req_id, opis, zrodlo, stacje_adresujace, stacja_weryfikujaca, stacja_niespelnienia, status, artefakty, checkpoint_weryfikacji)
+- `Manifest` - indeks stacji, statusy, timestampy, checkpointy, iteracja_bramki, historia_bramki, client_id
+- `GateHistoryEntry` - wpis historii iteracji bramki (iteracja, timestamp, audit_status, loop_target, gate_decision)
 - `StationOutput` - wyjscie stacji przekazywane przez agenta
 - `ContractValidation` - wynik walidacji kontraktu wejscia stacji docelowej
+- `ClientContext` - kontekst zarejestrowanego klienta (client_id, display_name, status, aliases, external_ids, id_fragments, metadata)
+- `ClientMatch` - pojedyncze dopasowanie klienta (client_id, display_name, confidence, matched_on)
+- `ResolveResult` - wynik resolve_client (query, normalized, matches, auto_resolved, needs_confirmation, suggested_action)
+- `ClientMemoryEntry` - wpis pamieci AI per-klient (memory_id, topic, content, scope, client_id, timestamp, tags)
+- `SharedKnowledgeEntry` - wpis wiedzy wspoldzielonej (knowledge_id, category, title, content, source, timestamp, tags)
 
 ### 3.3. envelope.py
 
 Operacje na kopercie:
 
-- `create_envelope(run_id, zamiar, sciezka)` - inicjalna koperta po `inicjuj`
+- `create_envelope(run_id, zamiar, sciezka, client_id)` - inicjalna koperta po `start_run`
 - `update_station_fields(envelope, station, output)` - aktualizacja `pola_stacji.<station>`
 - `accumulate_state(envelope, station, output)` - kumulacja pol kluczowych w `stan`
-- `validate_transition(envelope, target_station)` - walidacja przed przejsciem
+- `add_station_relations(envelope, station, run_id)` - dodanie relacji `zawiera` i `nastapila_po` (z `client_id` w node IDs)
 - `compress_envelope(envelope, keep_last_n=3)` - kompresja w sciezce doglebny
+- `get_envelope_summary(envelope)` - skrot koperty do wynikow narzedzi
+- `serialize_envelope(envelope)` - serializacja do YAML
+- `deserialize_envelope(yaml_str)` - deserializacja z YAML
 
 ### 3.4. checkpoint.py
 
-- `save_checkpoint(run_id, station, envelope)` - zapis do `stan_NN_<station>.yaml`
-- `load_checkpoint(run_id, station)` - odczyt checkpointu
-- `list_checkpoints(run_id)` - lista dostepnych checkpointow
-- `get_latest_checkpoint(run_id)` - ostatni zakonczony checkpoint
+- `save_checkpoint(run_id, station, envelope, suffix, workspace, client_id)` - zapis do `stan_<station><suffix>.yaml`
+- `load_checkpoint(run_id, station, suffix, workspace, client_id)` - odczyt checkpointu
+- `list_checkpoints(run_id, workspace, client_id)` - lista dostepnych checkpointow
+- `get_latest_checkpoint(run_id, workspace, client_id)` - ostatni zakonczony checkpoint (z manifestu, fallback po mtime)
+- `save_envelope_final(run_id, envelope, workspace, client_id)` - ostateczna koperta po close_run
 
 ### 3.5. routing.py
 
 Logika wyboru sciezki i kolejnosci stacji:
 
-- `determine_path(klasyfikacja, stawka, ryzyko)` - wybor sciezki
+- `determine_path(klasyfikacja, stawka="", ryzyko="")` - wybor sciezki (stawka/ryzyko opcjonalne)
 - `get_station_sequence(path)` - kolejnosc stacji dla sciezki
 - `get_next_station(current, path, gate_status)` - nastepna stacja
 - `get_skipped_stations(path)` - stacje pomijane w sciezce
 
 ### 3.6. quality_gate.py
 
-- `evaluate_gate(run_id, audit_status)` - ocena bramki
-- `can_loop(iteration)` - czy mozna iterowac (max 2)
-- `escalate(run_id, reason)` - eskalacja do uzytkownika
-- `loop_back(run_id, target_station)` - powrot do dobierz/planuj
+- `evaluate_gate(run_id, manifest, audit_status, audit_wymiary, loop_target)` - ocena bramki (przyjmuje obiekt `Manifest`, waliduje `audit_status`)
+- `reset_stations_for_loop(manifest, loop_target)` - reset statusow stacji od celu powrotu na `w_trakcie`
+- `infer_loop_target(wymiary, sciezka)` - wnioskuje cel powrotu na podstawie wymiarow audytu i sciezki
+- `get_gate_history(run_id, manifest)` - zwraca historie iteracji bramki z manifestu
 
 ### 3.7. stations.py
 
@@ -225,7 +236,7 @@ Rejestr klientow (multi-tenant). Zarzadza kontekstem klienta w `<workspace>/.ai-
 - `register_client(client_id, display_name, ...)` - rejestracja nowego klienta
 - `load_client(client_id, workspace)` - odczyt kontekstu (None gdy nie istnieje)
 - `update_client(client_id, updates, ...)` - aktualizacja metadanych, aliasow, NIP
-- `archive_client(client_id, ...)` / `unarchive_client(...)` - archiwizacja/reaktywacja
+- `archive_client(client_id, ...)` - archiwizacja (zmiana statusu na `zarchiwizowany`)
 - `delete_client(client_id, ...)` - usuniecie plikow + wezlow Memgraph (GDPR)
 - `resolve_client(query, ...)` - dopasowanie 6-warstwowe (L1-L6: client_id, external_id, alias, id_fragment, fuzzy_name, brak)
 
@@ -243,10 +254,10 @@ Auto-generowany `memory_id` jest unikalny przy kolizji tematu (dodatek timestamp
 
 ### 3.16. knowledge.py
 
-Wiedza wspoldzielona (cross-client) w 3 kategoriach: `decisions`, `patterns`, `pitfalls`.
+Wiedza wspoldzielona (cross-client) w 3 kategoriach: `decision`, `pattern`, `pitfall` (wartosci pola `category`; katalogi na dysku sa mnogie: `decisions/`, `patterns/`, `pitfalls/`).
 
-- `save_shared_knowledge(category, title, content, knowledge_id)` - zapis wezla wiedzy
-- `get_shared_knowledge(knowledge_id)` / `search_shared_knowledge(query, category)` / `list_shared_knowledge(category)`
+- `save_shared_knowledge(knowledge_id, category, title, content, source, tags)` - zapis wezla wiedzy
+- `get_shared_knowledge(knowledge_id, category)` / `search_shared_knowledge(query, category)` / `list_shared_knowledge(category)`
 
 Sanityzacja `knowledge_id` (slug). Zapisy atomowe. Integracja z Memgraph przez `write_shared_knowledge_node` (client_id="shared").
 

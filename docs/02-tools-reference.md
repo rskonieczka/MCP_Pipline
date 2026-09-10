@@ -1,25 +1,31 @@
 # Referencja narzedzi MCP
 
-Serwer wystawia ~49 narzedzi MCP podzielonych na 11 grup. Wszystkie narzedzia przyjmuja i zwracaja struktury JSON zgodne z modelem Pydantic.
+Serwer wystawia ~49 narzedzi MCP podzielonych na 11 grup oraz 2 narzedzia pomocnicze. Wszystkie narzedzia przyjmuja i zwracaja struktury JSON zgodne z modelem Pydantic.
 
 **Parametr `client_id`**: Wszystkie narzedzia zarzadzania run'ami, checkpointami, manifestami, RTM i pamiecia przyjmuja opcjonalny `client_id`. Hierarchia rozwiazywania: jawny parametr -> aktywny klient sesji (`set_active_client`) -> `PIPELINE_DEFAULT_CLIENT_ID` -> tryb legacy (`""`). Narzedzia wieloklientowe (grupy 8-11) zawsze wymagaja `client_id` (oprocz wiedzy i RAG wspoldzielonego).
+
+**Parametr `workspace`**: Wszystkie narzedzia przyjmuja opcjonalny `workspace`. Jesli pusty, serwer uzywa autodetekcji z polozenia pakietu (`_detect_workspace()` w `config.py`) lub `os.getcwd()`.
 
 ## 1. Run management
 
 ### 1.1. start_run
 
-Tworzy nowy run pipeline'u. Generuje `run_id`, tworzy katalog `.ai-kb/pipeline-runs/<run_id>/`, inicjalizuje `manifest.yaml` i pusta koperte.
+Tworzy nowy run pipeline'u. Generuje `run_id`, tworzy katalog `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`), inicjalizuje `manifest.yaml` i pusta koperte. Gdy `client_id` niepuste, wymaga istnienia klienta w rejestrze.
 
 ```python
 start_run(
     zamiar: str,           # wymagany: zamiar uzytkownika
     kontekst: str = "",    # opcjonalny: kontekst zadania
     zrodla: list[str] = [],# opcjonalne: zrodla bazowe
-    tryb_inicjacji: str = "pelny"  # "szybki" | "pelny"
+    tryb_inicjacji: str = "pelny",  # "szybki" | "pelny"
+    workspace: str = "",   # opcjonalny: sciezka workspace'a
+    client_id: str = ""    # opcjonalny: identyfikator klienta
 ) -> {
     run_id: str,
     first_station: str,    # zawsze "inicjuj"
     manifest_path: str,
+    client_id: str,        # rozwiazany client_id (pusty = legacy)
+    wejscie: dict,         # {kontekst, zrodla, tryb_inicjacji}
     envelope: dict         # pusta koperta
 }
 ```
@@ -29,30 +35,38 @@ start_run(
 Zwraca status run'u na podstawie manifestu.
 
 ```python
-get_run_status(run_id: str) -> {
+get_run_status(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     zamiar: str,
-    sciezka: str,          # "szybki" | "pelny" | "doglebny" | null
+    sciezka: str,          # "szybki" | "pelny" | "doglebny"
     iteracja_bramki: int,
+    status_runu: str,      # "w_trakcie" | "zakonczony" | "zablokowany"
     stacja_aktualna: str,
-    stacja_poprzednia: str | null,
     stacje: [
         {stacja, status, timestamp, checkpoint}
     ],
-    status_runu: str       # "w_trakcie" | "zakonczony" | "zablokowany"
+    timestamp_start: str,
+    timestamp_end: str | null,
+    client_id: str
 }
 ```
 
 ### 1.3. list_runs
 
-Lista wszystkich run'ow w katalogu persystencji.
+Lista wszystkich run'ow w katalogu persystencji. Gdy `client_id` podany, zwraca tylko run'y tego klienta.
 
 ```python
 list_runs(
     status_filter: str = "",  # "" | "w_trakcie" | "zakonczony" | "zablokowany"
-    limit: int = 50
+    limit: int = 50,
+    workspace: str = "",
+    client_id: str = ""
 ) -> [
-    {run_id, zamiar, sciezka, status, stacja_aktualna, timestamp}
+    {run_id, zamiar, sciezka, status, stacja_aktualna, timestamp_start, client_id}
 ]
 ```
 
@@ -61,11 +75,15 @@ list_runs(
 Wznawia run od ostatniej zakonczonej stacji. Odczytuje manifest, identyfikuje ostatni checkpoint, zwraca nastepna stacje.
 
 ```python
-resume_run(run_id: str) -> {
+resume_run(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     stacja_wznowienia: str,
     envelope: dict,        # zaladowana z ostatniego checkpointu
-    walidacja: dict        # czy wejscie stacji wznowienia jest kompletne
+    walidacja: dict | null # czy wejscie stacji wznowienia jest kompletne
 }
 ```
 
@@ -74,12 +92,17 @@ resume_run(run_id: str) -> {
 Zamyka run. Zapisuje ostateczna koperte, oznacza run jako zakonczony w manifeście, zapisuje wezel Run do Memgraph.
 
 ```python
-close_run(run_id: str) -> {
+close_run(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     status: "zakonczony",
     envelope_final_path: str,
     stacje_wykonane: int,
-    iteracje_bramki: int
+    iteracje_bramki: int,
+    already_closed: bool   # True jesli run byl juz zakonczony
 }
 ```
 
@@ -94,21 +117,16 @@ execute_station(
     run_id: str,
     station: str,          # nazwa stacji, np. "inicjuj"
     output: dict,          # wyjscie stacji (pola kontraktu wyjsciowego)
-    skip_validation: bool = False
+    skip_validation: bool = False,
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     run_id: str,
     station: str,
     status: "zakonczona" | "zablokowana",
     next_station: str | null,
     envelope_summary: dict,  # skrot zaktualizowanej koperty
-    validation: {
-        stacja_docelowa: str,
-        pola_wymagane: list[str],
-        pola_obecne: list[str],
-        pola_brakujace: list[str],
-        status: "gotowy" | "wnioskowane" | "niekompletne",
-        akcja_naprawcza: str
-    },
+    validation: dict | null, # null gdy brak nastepnej stacji
     checkpoint_path: str,
     memgraph_written: bool
 }
@@ -119,7 +137,11 @@ execute_station(
 Zwraca nastepna stacje na podstawie aktualnego stanu run'u, sciezki i statusu bramki. Nie wykonuje stacji.
 
 ```python
-get_next_station(run_id: str) -> {
+get_next_station(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     next_station: str | null,
     sciezka: str,
@@ -137,11 +159,14 @@ Ręczne pominiecie stacji (tryb hybrydowy). Oznacza stacje jako `pominieta` w ma
 skip_station(
     run_id: str,
     station: str,
-    reason: str = ""
+    reason: str = "",
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     run_id: str,
     station: str,
     status: "pominieta",
+    reason: str,
     next_station: str | null
 }
 ```
@@ -153,7 +178,9 @@ Zwraca kontrakt I/O dla stacji: wymagane i opcjonalne pola wejsciowe, pola wyjsc
 ```python
 get_station_contract(
     run_id: str,
-    station: str
+    station: str,
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     station: str,
     phase: str,
@@ -174,7 +201,11 @@ get_station_contract(
 Zwraca aktualna koperte run'u (z ostatniego checkpointu lub z pamieci).
 
 ```python
-get_envelope(run_id: str) -> {
+get_envelope(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     sciezka: str,
     stacja_aktualna: str,
@@ -182,7 +213,11 @@ get_envelope(run_id: str) -> {
     stan: dict,
     pola_stacji: dict,
     walidacja: dict,
-    relacje: list[dict]
+    relacje: list[dict],
+    rtm: list[dict],
+    wejscie: dict,
+    client_id: str,
+    timestamp: str
 }
 ```
 
@@ -193,9 +228,11 @@ Ręczna aktualizacja koperty (tryb hybrydowy). Pozwala agentowi nadpisac konkret
 ```python
 update_envelope(
     run_id: str,
-    section: str,          # "stan" | "pola_stacji.<stacja>" | "walidacja" | "relacje"
+    section: str,          # "stan" | "pola_stacji.<stacja>" | "walidacja" | "relacje" | "rtm"
     fields: dict,          # pola do aktualizacji
-    merge: bool = True     # True = scal z istniejacymi, False = zastap
+    merge: bool = True,    # True = scal z istniejacymi, False = zastap
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     run_id: str,
     updated_fields: list[str],
@@ -210,7 +247,9 @@ Waliduje czy wejscie stacji docelowej jest kompletne na podstawie aktualnej kope
 ```python
 validate_contract(
     run_id: str,
-    target_station: str
+    target_station: str,
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     stacja_docelowa: str,
     pola_wymagane: list[str],
@@ -226,14 +265,16 @@ validate_contract(
 
 ### 4.1. quality_gate
 
-Ocenia bramke jakosci po stacji `sprawdzenie`. Decyduje o przejsciu do `ewaluacja`/`utrwal` lub powrocie do `dobierz`/`planuj`.
+Ocenia bramke jakosci po stacji `sprawdzenie`. Decyduje o przejsciu do `ewaluacja`/`utrwal` lub powrocie do `dobierz`/`planuj`. Waliduje `audit_status` (musi byc `"zgodny"` lub `"niezgodny"`).
 
 ```python
 quality_gate(
     run_id: str,
-    audit_status: str,     # "zgodny" | "niezgodny"
+    audit_status: str,     # "zgodny" | "niezgodny" (walidowane)
     audit_wymiary: dict = {},  # opcjonalne: wymiary audytu
-    loop_target: str = ""  # opcjonalne: "dobierz" | "planuj" (gdzie wrocic)
+    loop_target: str = "", # opcjonalne: "dobierz" | "planuj" (gdzie wrocic)
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     run_id: str,
     gate_decision: "przejdz" | "powrot" | "eskalacja",
@@ -250,29 +291,35 @@ quality_gate(
 Zwraca historie iteracji bramki dla run'u.
 
 ```python
-get_gate_iterations(run_id: str) -> {
+get_gate_iterations(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     iteracja_aktualna: int,
     max_iteracje: 2,
+    pozostale_iteracje: int,
     historia: [
-        {iteracja, timestamp, audit_status, loop_target, checkpoint}
-    ],
-    pozostale_iteracje: int
+        {iteracja, timestamp, audit_status, loop_target, gate_decision}
+    ]
 }
 ```
 
 ## 5. Checkpointing
 
-### 5.1. save_checkpoint
+### 5.1. save_checkpoint_tool
 
 Ręczny zapis checkpointu (normalnie wywolywane automatycznie przez `execute_station`).
 
 ```python
-save_checkpoint(
+save_checkpoint_tool(
     run_id: str,
     station: str,
     envelope: dict,
-    suffix: str = ""       # np. "_iter1" dla checkpointow po iteracji bramki
+    suffix: str = "",      # np. "_iter1" dla checkpointow po iteracji bramki
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     run_id: str,
     station: str,
@@ -281,15 +328,17 @@ save_checkpoint(
 }
 ```
 
-### 5.2. load_checkpoint
+### 5.2. load_checkpoint_tool
 
 Odczyt checkpointu stacji.
 
 ```python
-load_checkpoint(
+load_checkpoint_tool(
     run_id: str,
     station: str,
-    suffix: str = ""
+    suffix: str = "",
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     run_id: str,
     station: str,
@@ -298,12 +347,16 @@ load_checkpoint(
 }
 ```
 
-### 5.3. list_checkpoints
+### 5.3. list_checkpoints_tool
 
 Lista wszystkich checkpointow dla run'u.
 
 ```python
-list_checkpoints(run_id: str) -> [
+list_checkpoints_tool(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> [
     {station, checkpoint_path, timestamp, suffix, size_bytes}
 ]
 ```
@@ -312,20 +365,22 @@ list_checkpoints(run_id: str) -> [
 
 ### 6.1. auto_pilot_start
 
-Uruchamia tryb auto-pilot. Serwer sekwencyjnie wywoluje LLM dla kazdej stacji, zapisuje checkpointy, obsluguje bramke jakosci.
+Uruchamia tryb auto-pilot. Serwer synchronicznie wywoluje LLM dla kazdej stacji, zapisuje checkpointy, obsluguje bramke jakosci. Limit 40 krokow (`_AUTO_PILOT_MAX_STEPS`).
 
 ```python
 auto_pilot_start(
     run_id: str,
     from_station: str = "",  # puste = od nastepnej stacji
     to_station: str = "",    # puste = do konca pipeline'u
-    max_gate_iterations: int = 2
+    max_gate_iterations: int = 2,
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     run_id: str,
-    status: "uruchomiony",
-    from_station: str,
-    to_station: str | null,
-    auto_pilot_id: str
+    status: "uruchomiony" | "zakonczony" | "zatrzymany" | "zablokowany",
+    stacje_wykonane: list[str],
+    bledy: list[str],
+    iteracja_bramki: int
 }
 ```
 
@@ -334,7 +389,11 @@ auto_pilot_start(
 Zwraca status wykonania auto-pilota.
 
 ```python
-auto_pilot_status(run_id: str) -> {
+auto_pilot_status(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     status: "uruchomiony" | "zakonczony" | "zatrzymany" | "zablokowany",
     stacja_aktualna: str,
@@ -342,7 +401,8 @@ auto_pilot_status(run_id: str) -> {
     stacje_pozostale: list[str],
     iteracja_bramki: int,
     bledy: list[str],
-    ostatni_llm_koszt: dict | null  # tokeny, koszt
+    ostatni_llm_koszt: dict | null,  # {tokens_wejscie, tokens_wyjscie, koszt_usd, model}
+    laczny_koszt: dict | null        # {tokens_wejscie, tokens_wyjscie, koszt_usd}
 }
 ```
 
@@ -351,25 +411,33 @@ auto_pilot_status(run_id: str) -> {
 Zatrzymuje auto-pilot. Zapisuje stan, pozwala na reczna kontynuacje.
 
 ```python
-auto_pilot_stop(run_id: str) -> {
+auto_pilot_stop(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     status: "zatrzymany",
-    stacja_zatrzymania: str,
-    checkpoint_path: str
+    stacja_zatrzymania: str
 }
 ```
 
-## 6b. Requirements Traceability Matrix (RTM)
+## 7. Requirements Traceability Matrix (RTM)
 
-### 6b.1. get_rtm
+### 7.1. get_rtm
 
 Zwraca macierz Requirements Traceability Matrix dla run'u. RTM mapuje wymagania uzytkownika na stacje adresujace, weryfikujace i artefakty.
 
 ```python
-get_rtm(run_id: str) -> {
+get_rtm(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     rtm: [
-        {req_id, opis, zrodlo, stacje_adresujace, stacja_weryfikujaca, status, artefakty, checkpoint_weryfikacji}
+        {req_id, opis, zrodlo, stacje_adresujace, stacja_weryfikujaca,
+         stacja_niespelnienia, status, artefakty, checkpoint_weryfikacji}
     ],
     coverage: {
         total, nieadresowane, adresowane, zrealizowane, weryfikowane, niespelnione,
@@ -378,7 +446,7 @@ get_rtm(run_id: str) -> {
 }
 ```
 
-### 6b.2. update_rtm
+### 7.2. update_rtm
 
 Reczna aktualizacja wpisu RTM. Pozwala agentowi nadpisac status wymagania, dodac stacje adresujace lub artefakty.
 
@@ -386,15 +454,17 @@ Reczna aktualizacja wpisu RTM. Pozwala agentowi nadpisac status wymagania, dodac
 update_rtm(
     run_id: str,
     req_id: str,          # identyfikator wymagania
-    updates: dict         # pola do aktualizacji (status, stacje_adresujace, artefakty, ...)
+    updates: dict,        # pola do aktualizacji (status, stacje_adresujace, artefakty, ...)
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     run_id: str,
     entry: dict,           # zaktualizowany wpis
-    coverage: dict        # raport pokrycia
+    coverage: dict         # raport pokrycia
 }
 ```
 
-### 6b.3. add_rtm_entry
+### 7.3. add_rtm_entry
 
 Dodaje nowy wpis do RTM. Uzyj gdy wymaganie nie zostalo automatycznie wyekstrahowane przez stacje zmienne.
 
@@ -405,20 +475,26 @@ add_rtm_entry(
     opis: str,                        # opis wymagania
     zrodlo: str = "zamiar",           # zrodlo ("zamiar", "kontekst", "zrodla", "agent_inference")
     stacje_adresujace: list = [],     # stacje adresujace
-    status: str = "nieadresowane"     # status poczatkowy
+    status: str = "nieadresowane",    # status poczatkowy
+    workspace: str = "",
+    client_id: str = ""
 ) -> {
     run_id: str,
     entry: dict,                      # dodany wpis
-    coverage: dict                   # raport pokrycia
+    coverage: dict                    # raport pokrycia
 }
 ```
 
-### 6b.4. validate_rtm_coverage
+### 7.4. validate_rtm_coverage
 
 Waliduje pokrycie wymagan w RTM. Zwraca raport z lista nieadresowanych i niespelnionych wymagan.
 
 ```python
-validate_rtm_coverage(run_id: str) -> {
+validate_rtm_coverage(
+    run_id: str,
+    workspace: str = "",
+    client_id: str = ""
+) -> {
     run_id: str,
     coverage: {
         total: int,
@@ -449,10 +525,14 @@ Wszystkie narzedzia zwracaja bledy przez mechanizm MCP error response:
 | `CHECKPOINT_NOT_FOUND` | Checkpoint nie istnieje |
 | `MEMGRAPH_UNAVAILABLE` | Memgraph niedostepny (opcjonalny, nie blokuje) |
 | `LLM_NOT_CONFIGURED` | Tryb auto-pilot wymaga klucza API LLM |
+| `LLM_OUTPUT_PARSE_ERROR` | Wyjscie LLM nie zawiera bloku KOPERTA (auto-pilot) |
 | `INVALID_PATH` | Sciezka pipeline'u niezgodna z definicja |
 | `RUN_CLOSED` | Run zakonczony, nie mozna wykonywac operacji |
+| `SKILL_NOT_FOUND` | Plik skilla nie istnieje w wbudowanym katalogu pakietu |
 | `CLIENT_NOT_FOUND` | Klient o podanym `client_id` nie istnieje w rejestrze |
 | `CLIENT_ALREADY_EXISTS` | Klient o podanym `client_id` juz zarejestrowany |
+| `AMBIGUOUS_CLIENT` | Zapytanie dopasowuje wiecej niz jednego klienta |
+| `CLIENT_ID_MISMATCH` | Run nalezy do innego klienta niz podany w wywolaniu |
 | `INVALID_CLIENT_ID` | `client_id` niezgodny z regex `^[a-z0-9][a-z0-9-]*[a-z0-9]$` |
 
 ## 8. Zarzadzanie klientami (multi-tenant)
@@ -463,25 +543,34 @@ Rejestruje nowego klienta w `<workspace>/.ai-kb/clients/<client_id>/context.yaml
 
 ```python
 register_client(
-    client_id: str,          # wymagany: slug (regex ^[a-z0-9][a-z0-9-]*[a-z0-9]$)
-    display_name: str,       # wymagany: nazwa wyswietlana
-    nip: str = "",           # opcjonalny: NIP
-    external_id: str = "",   # opcjonalny: ID z systemu zewnetrznego
-    aliases: list[str] = [], # opcjonalne: aliasy dla dopasowania
-    metadata: dict = {},     # opcjonalne: metadane
+    client_id: str,            # wymagany: slug (regex ^[a-z0-9][a-z0-9-]*[a-z0-9]$)
+    display_name: str,         # wymagany: nazwa wyswietlana
+    aliases: list[str] = [],   # opcjonalne: aliasy dla dopasowania (skroty, literowki)
+    external_ids: dict = {},   # opcjonalne: {"nip": "...", "phone": "...", "krs": "..."}
+    id_fragments: list = [],   # opcjonalne: fragmenty ID (np. ostatnie 4 cyfry NIP)
+    metadata: dict = {},       # opcjonalne: metadane (branza, osoba kontaktowa)
     workspace: str = ""
-) -> { client_id, display_name, status: "aktywny" }
+) -> { client_id, display_name, status, registered, aliases, external_ids, id_fragments, metadata }
 ```
 
 ### 8.2. resolve_client
 
-Dopasowuje zapytanie tekstowe do klienta (6 warstw: L1-L6).
+Rozpoznaje klienta na podstawie niejednoznacznego identyfikatora. Przeszukuje rejestr: client_id, aliasy, external_ids (NIP, telefon, KRS), id_fragments. Zwraca liste kandydatow z poziomem pewnosci.
 
 ```python
 resolve_client(
-    query: str,              # wymagany: tekst do dopasowania
+    query: str,              # wymagany: tekst do dopasowania (nazwa, alias, NIP, telefon, fragment)
     workspace: str = ""
-) -> { client_id, display_name, confidence, match_layer, method }
+) -> {
+    query: str,
+    normalized: str,
+    matches: [
+        {client_id, display_name, confidence, matched_on}
+    ],
+    auto_resolved: bool,     # True przy 100% pewnosci
+    needs_confirmation: bool, # True ponizej 100%
+    suggested_action: str
+}
 ```
 
 ### 8.3. set_active_client / get_active_client
@@ -489,23 +578,45 @@ resolve_client(
 Ustawia/pobiera aktywnego klienta dla sesji procesu MCP.
 
 ```python
-set_active_client(client_id: str) -> { active_client_id }
-get_active_client() -> { active_client_id }
+set_active_client(
+    client_id: str,
+    workspace: str = ""
+) -> { client_id, display_name, status: "aktywny" }
+
+get_active_client() -> { client_id: str, is_set: bool }
 ```
 
 ### 8.4. get_client_info / list_clients
 
 ```python
-get_client_info(client_id: str, workspace: str = "") -> { client_id, display_name, nip, ... }
-list_clients(include_archived: bool = False, workspace: str = "") -> [{ client_id, display_name, status }]
+get_client_info(
+    client_id: str,
+    workspace: str = ""
+) -> { client_id, display_name, status, registered, aliases, external_ids, id_fragments, metadata }
+
+list_clients(
+    workspace: str = ""
+) -> [{ client_id, display_name, status, aliases_count, external_ids_count }]
 ```
 
 ### 8.5. update_client / archive_client / delete_client
 
 ```python
-update_client(client_id: str, updates: dict, workspace: str = "") -> { ... }
-archive_client(client_id: str, workspace: str = "") -> { status: "zarchiwizowany" }
-delete_client(client_id: str, workspace: str = "") -> { deleted, runs_deleted, memgraph_deleted }
+update_client(
+    client_id: str,
+    updates: dict,        # pola do aktualizacji (aliases, external_ids, id_fragments, metadata, status)
+    workspace: str = ""
+) -> { client_id, display_name, status, ... }
+
+archive_client(
+    client_id: str,
+    workspace: str = ""
+) -> { client_id, display_name, status: "zarchiwizowany" }
+
+delete_client(
+    client_id: str,
+    workspace: str = ""
+) -> { client_id, deleted: True, runs_deleted: int, rag_deleted: bool, memory_deleted: bool, memgraph_deleted: bool }
 ```
 
 `delete_client` usuwa pliki (`shutil.rmtree`) i wezly Memgraph (`delete_client_nodes` - GDPR).
@@ -514,73 +625,112 @@ delete_client(client_id: str, workspace: str = "") -> { deleted, runs_deleted, m
 
 ### 9.1. save_shared_knowledge
 
-Zapisuje wpis wiedzy w kategorii `decisions`, `patterns` lub `pitfalls`.
+Zapisuje wpis wiedzy w kategorii `decision`, `pattern` lub `pitfall`.
 
 ```python
 save_shared_knowledge(
-    category: str,           # "decisions" | "patterns" | "pitfalls"
-    title: str,              # wymagany
-    content: str,            # wymagany
-    knowledge_id: str = "",  # opcjonalny (auto-generowany z title)
+    knowledge_id: str,     # wymagany: identyfikator wpisu (slug)
+    category: str,         # "decision" | "pattern" | "pitfall"
+    title: str,            # wymagany
+    content: str,          # wymagany
+    source: str = "",      # opcjonalny: zrodlo wiedzy
+    tags: list[str] = [],  # opcjonalne: tagi
     workspace: str = ""
-) -> { knowledge_id, category, title }
+) -> { knowledge_id, category, title, content, source, timestamp, tags }
 ```
 
 ### 9.2. get_shared_knowledge / search_shared_knowledge / list_shared_knowledge
 
 ```python
-get_shared_knowledge(knowledge_id: str, workspace: str = "") -> { ... }
-search_shared_knowledge(query: str, category: str = "", workspace: str = "") -> [{ ... }]
-list_shared_knowledge(category: str = "", workspace: str = "") -> [{ ... }]
+get_shared_knowledge(
+    knowledge_id: str,
+    category: str,         # wymagany: "decision" | "pattern" | "pitfall"
+    workspace: str = ""
+) -> { knowledge_id, category, title, content, source, timestamp, tags }
+
+search_shared_knowledge(
+    query: str,
+    category: str = "",
+    workspace: str = ""
+) -> [{ knowledge_id, category, title, content, ... }]
+
+list_shared_knowledge(
+    category: str = "",
+    workspace: str = ""
+) -> [{ knowledge_id, category, title, ... }]
 ```
 
 ## 10. Pamiec AI per-klient
 
 ### 10.1. save_client_memory
 
-Zapisuje wpis pamieci AI dla klienta. Auto-generowany `memory_id` jest unikalny przy kolizji tematu.
+Zapisuje wpis pamieci AI dla klienta. Auto-generowany `memory_id` jest unikalny przy kolizji tematu (dodatek timestamp).
 
 ```python
 save_client_memory(
     topic: str,              # wymagany
     content: str,            # wymagany
     client_id: str = "",     # opcjonalny (hierarchia rozwiazywania)
-    tags: list[str] = [],
     memory_id: str = "",     # opcjonalny (jawny = upsert)
+    tags: list[str] = [],    # opcjonalne
     workspace: str = ""
-) -> { memory_id, topic, scope: "client" }
+) -> { memory_id, topic, content, scope: "client", client_id, timestamp, tags }
 ```
 
-### 10.2. save_shared_memory
+### 10.2. save_shared_memory / get_shared_memory
 
-Zapisuje wpis pamieci wspoldzielonej (cross-client).
+Zapisuje/odczytuje wpis pamieci wspoldzielonej (cross-client).
 
 ```python
-save_shared_memory(topic: str, content: str, tags: list = [], memory_id: str = "") -> { ... }
+save_shared_memory(
+    topic: str,
+    content: str,
+    memory_id: str = "",
+    tags: list[str] = [],
+    workspace: str = ""
+) -> { memory_id, topic, content, scope: "shared", timestamp, tags }
+
+get_shared_memory(
+    memory_id: str,
+    workspace: str = ""
+) -> { memory_id, topic, content, scope: "shared", timestamp, tags }
 ```
 
 ### 10.3. get_client_memory / list_client_memories / search_client_memories
 
 ```python
-get_client_memory(memory_id: str, client_id: str = "", workspace: str = "") -> { ... }
-list_client_memories(client_id: str = "", workspace: str = "") -> [{ ... }]
+get_client_memory(
+    memory_id: str,
+    client_id: str = "",
+    workspace: str = ""
+) -> { memory_id, topic, content, scope, client_id, timestamp, tags }
+
+list_client_memories(
+    client_id: str = "",
+    workspace: str = ""
+) -> [{ memory_id, topic, content, scope, client_id, timestamp, tags }]
+
 search_client_memories(
-    query: str, client_id: str = "", include_shared: bool = True, workspace: str = ""
-) -> [{ memory_id, topic, scope, client_id }]
+    query: str,
+    client_id: str = "",
+    include_shared: bool = True,
+    workspace: str = ""
+) -> [{ memory_id, topic, scope, client_id, timestamp, tags }]
 ```
 
 ## 11. RAG per-klient
 
 ### 11.1. index_client_document
 
-Indeksuje dokument w RAG klienta (indeks keyword-based, atomowy zapis).
+Indeksuje dokument w RAG klienta (indeks keyword-based, atomowy zapis). Gdy `client_id` puste, indeksuje w RAG wspoldzielonym.
 
 ```python
 index_client_document(
     doc_id: str,             # wymagany
     content: str,            # wymagany
-    client_id: str = "",     # opcjonalny (hierarchia rozwiazywania)
-    metadata: dict = {},
+    title: str = "",         # opcjonalny: tytul dokumentu
+    metadata: dict = {},     # opcjonalne: metadane dokumentu
+    client_id: str = "",     # opcjonalny (pusty = RAG wspoldzielony)
     workspace: str = ""
 ) -> { doc_id, indexed: True }
 ```
@@ -589,8 +739,45 @@ index_client_document(
 
 ```python
 search_client_rag(
-    query: str, client_id: str = "", include_shared: bool = True, limit: int = 10
+    query: str,
+    client_id: str = "",
+    limit: int = 10,
+    workspace: str = ""
 ) -> [{ doc_id, score, snippet }]
-search_shared_rag(query: str, limit: int = 10) -> [{ doc_id, score, snippet }]
-list_rag_documents(client_id: str = "", workspace: str = "") -> [{ doc_id, metadata }]
+
+search_shared_rag(
+    query: str,
+    limit: int = 10,
+    workspace: str = ""
+) -> [{ doc_id, score, snippet }]
+
+list_rag_documents(
+    client_id: str = "",
+    workspace: str = ""
+) -> [{ doc_id, metadata }]
+```
+
+## Narzedzia pomocnicze
+
+### list_stations
+
+Lista wszystkich dostepnych stacji pipeline'u.
+
+```python
+list_stations() -> list[str]
+# ["inicjuj", "zmienne", "analiza", "dekompozycja", "dobierz", "routing",
+#  "planuj", "realizuj", "weryfikacja", "sprawdzenie", "ewaluacja",
+#  "utrwal", "monitoruj", "audyt_runu"]
+```
+
+### verify_integrity
+
+Weryfikuje integralnosc wbudowanych skilli. Zwraca liste bledow.
+
+```python
+verify_integrity() -> {
+    errors: list[str],
+    status: "ok" | "bledy",
+    skills_count: int
+}
 ```

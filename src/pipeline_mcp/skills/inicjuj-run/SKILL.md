@@ -114,7 +114,7 @@ Po klasyfikacji ustal punkt wejścia:
 Jeśli klasyfikacja to `rutynowe` albo `złożone` (czyli pipeline zostaje uruchomiony):
 
 1. Wygeneruj `run_id` w formacie `<YYYY-MM-DD>-<skrot-zamiaru>` (np. `2026-06-29-weryfikacja-mechanizmu`).
-2. Utwórz katalog `.ai-kb/pipeline-runs/<run_id>/`.
+2. Utwórz katalog `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`).
 3. Utwórz plik `manifest.yaml` z pustym stanem stacji:
 
 ```yaml
@@ -192,12 +192,13 @@ KOPERTA:
     status: gotowy
     akcja_naprawcza: ""
   relacje:
-    - zrodlo: "stacja:inicjuj"
-      cel: "stacja:zmienne"
+    - zrodlo: "stacja:<client_id>:<run_id>:inicjuj"
+      cel: "stacja:<client_id>:<run_id>:zmienne"
       typ: nastapila_po
-    - zrodlo: "run:<run_id>"
-      cel: "stacja:inicjuj"
+    - zrodlo: "run:<client_id>:<run_id>"
+      cel: "stacja:<client_id>:<run_id>:inicjuj"
       typ: zawiera
+    # Node IDs w trybie legacy (brak client_id) nie zawierają prefiksu client_id (np. run:<run_id> zamiast run:<client_id>:<run_id>).
 ```
 
-Po wyemitowaniu koperty zapisz ją do `.ai-kb/pipeline-runs/<run_id>/stan_00_inicjuj.yaml` i zaktualizuj `manifest.yaml` (status `zakonczona`, timestamp). `utrwal` zapisze węzły i krawędzie do Memgraph na podstawie sekcji `relacje`.
+Po wyemitowaniu koperty zapisz ją do `.ai-kb/clients/<client_id>/pipeline-runs/<run_id>/stan_00_inicjuj.yaml` (tryb legacy bez `client_id`: `.ai-kb/pipeline-runs/<run_id>/`) i zaktualizuj `manifest.yaml` (status `zakonczona`, timestamp). `utrwal` zapisze węzły i krawędzie do Memgraph na podstawie sekcji `relacje`.
