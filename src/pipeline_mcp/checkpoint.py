@@ -1,6 +1,8 @@
 """Checkpointowanie plikowe YAML."""
 from __future__ import annotations
 
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -9,6 +11,25 @@ import yaml
 from .config import get_config
 from .envelope import serialize_envelope
 from .models import CheckpointNotFoundError, Envelope
+
+
+def _atomic_yaml_dump(path: Path, data: dict) -> None:
+    """Atomowy zapis YAML (tempfile + os.replace). Chroni przed uszkodzeniem pliku."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(path.parent), suffix=".tmp", prefix=path.stem
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            yaml.dump(
+                data, f, allow_unicode=True,
+                default_flow_style=False, sort_keys=False,
+            )
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 
 def save_checkpoint(
@@ -28,14 +49,7 @@ def save_checkpoint(
         "timestamp": datetime.now().isoformat(),
     }
 
-    with open(checkpoint_path, "w", encoding="utf-8") as f:
-        yaml.dump(
-            data,
-            f,
-            allow_unicode=True,
-            default_flow_style=False,
-            sort_keys=False,
-        )
+    _atomic_yaml_dump(checkpoint_path, data)
 
     return str(checkpoint_path)
 
@@ -146,7 +160,16 @@ def save_envelope_final(
     path = config.envelope_final_path(run_id, workspace, client_id)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(serialize_envelope(envelope))
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(path.parent), suffix=".tmp", prefix=path.stem
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(serialize_envelope(envelope))
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
     return str(path)

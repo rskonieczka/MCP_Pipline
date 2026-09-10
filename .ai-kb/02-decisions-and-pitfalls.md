@@ -207,3 +207,57 @@ Pelny audyt dokumentacji (`docs/`, `README.md`) wykryl 30 pozycji dlugu dokument
 15. **`list_available_skills`**: zwraca nazwy stacji (`audyt_runu` z podkresleniem), nie katalogi (`audyt-runu` z myslnikiem); `load_skill` uzywa `STATION_TO_SKILL_DIR`, nie `replace('-', '_')`.
 
 Naprawa: edycja 9 plikow (`README.md`, `docs/01-architecture.md`, `docs/02-tools-reference.md`, `docs/03-envelope-spec.md`, `docs/04-paths-and-routing.md`, `docs/05-quality-gate.md`, `docs/06-checkpointing.md`, `docs/07-auto-pilot.md`, `docs/10-stations-builtin.md`). Zasada minimalnej zmiany - aktualizacja istniejacych plikow, bez tworzenia nowych.
+
+### P28: Dlug dokumentacyjny - audyt 2026-09-10 (naprawione)
+
+Kolejny audyt dokumentacji po P27 wykryl 11 pozostalych rozbieznosci miedzy kodem a dokumentacja. P27 naprawil glownie sygnatury i nazwy, ale pominal formaty zwrotne narzedzi multi-tenant oraz kilka pozostalych problemow:
+
+1. **`docs/03-envelope-spec.md`**: lista operacji `envelope.py` wymieniala `validate_transition` (nie istnieje w `envelope.py`, walidacja jest w `contracts.py` przez `validate_input`). Brakowalo `add_station_relations` i `get_envelope_summary`.
+
+2. **`docs/09-configuration.md`**: lista widocznych narzedzi miala `save_checkpoint` zamiast `save_checkpoint_tool` (P27 naprawil to w `docs/02-tools-reference.md` ale pominal `docs/09-configuration.md`).
+
+3. **`docs/02-tools-reference.md` - kod bledu `INVALID_CLIENT_ID`**: wymieniony w tabeli kodow bledow, ale nie istnieje jako oddzielna klasa wyjatku w `models.py`. `validate_client_id` rzuca generic `PipelineError` (code `PIPELINE_ERROR`). Uzupelniono opis o wyjasnienie.
+
+4. **`docs/02-tools-reference.md` - `list_client_memories`**: doc mowil o `{ memory_id, topic, content, scope, client_id, timestamp, tags }`, kod zwraca `{ memory_id, topic, tags, timestamp }` (bez `content`/`scope`/`client_id`).
+
+5. **`docs/02-tools-reference.md` - `search_client_memories`**: doc mowil o `timestamp`, kod zwraca `content` (obciete do 200 znakow) zamiast `timestamp`.
+
+6. **`docs/02-tools-reference.md` - `search_shared_knowledge`**: doc mowil o `content`, kod zwraca `source`/`tags`/`path` (bez `content`).
+
+7. **`docs/02-tools-reference.md` - `index_client_document`**: doc mowil o `{ doc_id, indexed: True }`, kod zwraca `{ doc_id, scope, client_id, indexed, total_docs }`.
+
+8. **`docs/02-tools-reference.md` - `search_client_rag`**: doc mowil o `[{ doc_id, score, snippet }]`, kod zwraca `[{ doc_id, title, content, score, scope, client_id, metadata }]`.
+
+9. **`docs/02-tools-reference.md` - `search_shared_rag`**: jw. - doc mowil o `snippet`, kod zwraca `title`/`content`/`scope`/`client_id`/`metadata`.
+
+10. **`docs/02-tools-reference.md` - `list_rag_documents`**: doc mowil o `[{ doc_id, metadata }]`, kod zwraca `[{ doc_id, title, scope, indexed_at }]`.
+
+11. **`docs/01-architecture.md` - brief comment `models.py`**: mowil o `Run, Envelope, Station, Manifest` - `Station` nie istnieje jako model Pydantic (jest `StacjaManifest` w `models.py` i `StationDef` jako dataclass w `stations.py`). Zaktualizowano o wlasciwe nazwy modeli.
+
+Naprawa: edycja 4 plikow (`docs/01-architecture.md`, `docs/02-tools-reference.md`, `docs/03-envelope-spec.md`, `docs/09-configuration.md`). Zasada minimalnej zmiany - aktualizacja istniejacych plikow. Przyczyna pozostalosci: P27 skupil sie na sygnaturach i nazwach narzedzi, ale nie weryfikowal formatow zwrotnych narzedzi multi-tenant (grupy 8-11 dodane po P27 lub nieaudytowane).
+
+Dodatkowo naprawiono 2 problemy implementacyjne wykryte podczas audytu P28:
+
+12. **`INVALID_CLIENT_ID` jako generic `PIPELINE_ERROR`**: `validate_client_id` w `client_registry.py` rzucal generic `PipelineError` (code `PIPELINE_ERROR`) zamiast dedykowanej klasy. Dodano `InvalidClientIdError` w `models.py` z `code = "INVALID_CLIENT_ID"` i uzyto w `validate_client_id`.
+
+13. **`close_run` - `already_closed` warunkowe**: pole `already_closed` bylo zwracane tylko gdy `True` (run juz zakonczony). Przy pierwszym zamknieciu brakowalo `already_closed: False`. Unifikowano - zawsze zwracane.
+
+### P29: Dlug implementacyjny - audyt 2026-09-10 (naprawione)
+
+Doglebna analiza kodu wykryla 8 pozycji dlugu implementacyjnego w 7 modulach. Naprawiono wszystkie, 131 testow PASS.
+
+1. **Nieatomowe zapisy w `checkpoint.py`** (F8): `save_checkpoint` i `save_envelope_final` uzywaly `open(path, "w")` + `yaml.dump` bez wzorca atomowego. P22 naprawil `client_memory.py`, `knowledge.py`, `client_registry.py`, `rag.py`, ale pominal `checkpoint.py`. Crash procesu pozostawial uszkodzony plik checkpointu lub envelope_final. Naprawa: dodano `_atomic_yaml_dump(path, data)` we wzorcu `tempfile.mkstemp` + `os.replace`, spoistym z reszta kodu.
+
+2. **Nieatomowy zapis w `manifest.py`** (F8): `save_manifest` uzywal `open(path, "w")` + `yaml.dump`. Manifest jest kluczowy dla integralnosci run'u. Naprawa: przepisano na wzorzec atomowy `tempfile.mkstemp` + `os.replace`.
+
+3. **5 nieuzywanych modeli w `models.py`**: `Run`, `StartRunResult`, `ExecuteStationResult`, `NextStationResult`, `StationContract` - zdefiniowane ale nigdy nie importowane ani nie uzywane (narzedzia MCP zwracaja surowe slowniki). Usunieto.
+
+4. **8 nieuzywanych funkcji**: `get_skipped_stations`, `get_path_stations`, `is_last_station` (routing.py), `get_station_index` (stations.py), `deserialize_envelope` (envelope.py), `get_current_station` (manifest.py), `get_pipeline_spec`, `get_contracts_spec` (skills_loader.py) - zdefiniowane ale nigdy nie wywolywane z kodu ani testow. Usunieto. `validate_graph_continuity` (memgraph.py) zostawiono - jest udokumentowana w `docs/` jako funkcja audytowa.
+
+5. **`write_relation` w `memgraph.py` - nieuzywany parametr `fields`**: funkcja przyjmowala `fields: list[str] | None = None` ale nigdy go nie uzywala w ciele. Wywolanie z `write_relations_from_envelope` przekazywalo `rel.pola`. Usunieto parametr z sygnatury i wywolania.
+
+6. **`auto_pilot.py` - zduplikowana logika `update_station_fields`**: `execute_station_with_llm` recznie ustawial `envelope.pola_stacji[station]`, `envelope.stacja_poprzednia`, `envelope.stacja_aktualna` - to samo co `update_station_fields` w `envelope.py`, wywolywane ponownie w `execute_station` w `server.py`. Dublowanie moglo powodowac rozjazd logiki. Usunieto zduplikowany kod z auto_pilot - koperta jest aktualizowana przez `execute_station`.
+
+7. **`auto_pilot.py` - nieimplementowane sledzenie kosztu LLM**: `laczny_koszt` i `ostatni_llm_koszt` zainicjowane w `start_auto_pilot` i zwracane w `AutoPilotStatus`, ale nigdy aktualizowane (dostawcy LLM w `llm.py` nie zwracaja metryk usage). Zgodnie z YAGNI usunieto nieimplementowane pola z `AutoPilotStatus` i stanu auto-pilota.
+
+8. **`rag.py` - `search_rag` zwracal pelne `content` dokumentu**: w przeciwienstwie do `client_memory.py` (ucina do 200 znakow), RAG search zwracal pelna tresc dokumentu w wynikach wyszukiwania - nieefektywne przy duzych dokumentach. Naprawa: uciecie `content[:200]` spojne z `client_memory.py`.

@@ -181,11 +181,3 @@ def get_station(name: str) -> StationDef:
 def station_exists(name: str) -> bool:
     """Sprawdza czy stacja istnieje."""
     return name in STATIONS
-
-
-def get_station_index(name: str) -> int:
-    """Zwraca indeks stacji w ALL_STATIONS. -1 jesli nie znaleziono."""
-    try:
-        return ALL_STATIONS.index(name)
-    except ValueError:
-        return -1

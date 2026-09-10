@@ -39,6 +39,7 @@ from .models import (
     ClientContext,
     ClientMatch,
     ClientNotFoundError,
+    InvalidClientIdError,
     PipelineError,
     ResolveResult,
 )
@@ -94,11 +95,11 @@ def normalize(s: str) -> str:
 
 
 def validate_client_id(client_id: str) -> None:
-    """Waliduje format client_id. Rzuca PipelineError przy nieprawidlowym formacie."""
+    """Waliduje format client_id. Rzuca InvalidClientIdError przy nieprawidlowym formacie."""
     if not client_id:
-        raise PipelineError("client_id jest wymagany")
+        raise InvalidClientIdError("client_id jest wymagany")
     if not CLIENT_ID_RE.fullmatch(client_id):
-        raise PipelineError(
+        raise InvalidClientIdError(
             f"Nieprawidlowy client_id '{client_id}'. "
             "Wymagany format: slug [a-z0-9][a-z0-9-]*[a-z0-9] (min 2 znaki, bez spacji)."
         )

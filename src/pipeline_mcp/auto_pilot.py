@@ -44,8 +44,6 @@ def start_auto_pilot(
         "bledy": [],
         "to_station": to_station,
         "max_gate_iterations": max_gate_iterations,
-        "laczny_koszt": {"tokens_wejscie": 0, "tokens_wyjscie": 0, "koszt_usd": 0.0},
-        "ostatni_llm_koszt": None,
     }
 
     return {
@@ -78,11 +76,6 @@ def execute_station_with_llm(
 
     # Parsuj wyjscie - szukaj bloku KOPERTA
     station_output = parse_llm_output(llm_output, station)
-
-    # Aktualizuj koperte
-    envelope.pola_stacji[station] = station_output
-    envelope.stacja_poprzednia = envelope.stacja_aktualna
-    envelope.stacja_aktualna = station
 
     return station_output, envelope
 
@@ -174,8 +167,6 @@ def get_auto_pilot_status(run_id: str) -> AutoPilotStatus:
         "stacje_pozostale": [],
         "iteracja_bramki": 0,
         "bledy": [],
-        "laczny_koszt": {"tokens_wejscie": 0, "tokens_wyjscie": 0, "koszt_usd": 0.0},
-        "ostatni_llm_koszt": None,
     })
 
     return AutoPilotStatus(
@@ -186,8 +177,6 @@ def get_auto_pilot_status(run_id: str) -> AutoPilotStatus:
         stacje_pozostale=state["stacje_pozostale"],
         iteracja_bramki=state["iteracja_bramki"],
         bledy=state["bledy"],
-        ostatni_llm_koszt=state.get("ostatni_llm_koszt"),
-        laczny_koszt=state.get("laczny_koszt"),
     )
 
 

@@ -145,7 +145,7 @@ def write_station_node(
 
 
 def write_relation(
-    source: str, target: str, rel_type: str, fields: list[str] | None = None
+    source: str, target: str, rel_type: str
 ) -> bool:
     """Zapisuje krawedz miedzy wezlami.
 
@@ -227,7 +227,7 @@ def write_relations_from_envelope(run_id: str, envelope: Envelope) -> bool:
 
     success = True
     for rel in envelope.relacje:
-        if not write_relation(rel.zrodlo, rel.cel, rel.typ, rel.pola):
+        if not write_relation(rel.zrodlo, rel.cel, rel.typ):
             success = False
 
     # Zapisz wezly Wymaganie i relacje z RTM

@@ -1,6 +1,8 @@
 """Zarzadzanie manifestem run'u."""
 from __future__ import annotations
 
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -26,16 +28,25 @@ def create_manifest(
 
 
 def save_manifest(manifest: Manifest, path: Path) -> None:
-    """Zapisuje manifest do pliku YAML."""
+    """Zapisuje manifest do pliku YAML (atomowo)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.dump(
-            manifest.model_dump(),
-            f,
-            allow_unicode=True,
-            default_flow_style=False,
-            sort_keys=False,
-        )
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(path.parent), suffix=".tmp", prefix=path.stem
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            yaml.dump(
+                manifest.model_dump(),
+                f,
+                allow_unicode=True,
+                default_flow_style=False,
+                sort_keys=False,
+            )
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 
 def load_manifest(path: Path) -> Manifest:
@@ -106,14 +117,6 @@ def get_last_completed_station(manifest: Manifest) -> str | None:
         if s.status == "zakonczona":
             last = s.stacja
     return last
-
-
-def get_current_station(manifest: Manifest) -> str | None:
-    """Zwraca stacje w_trakcie."""
-    for s in manifest.stacje:
-        if s.status == "w_trakcie":
-            return s.stacja
-    return None
 
 
 def close_manifest(manifest: Manifest) -> Manifest:

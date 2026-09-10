@@ -158,7 +158,7 @@ def search_rag(
                 results.append({
                     "doc_id": doc.get("doc_id", ""),
                     "title": doc.get("title", ""),
-                    "content": doc.get("content", ""),
+                    "content": doc.get("content", "")[:200],
                     "score": round(score, 3),
                     "scope": "client",
                     "client_id": client_id,
@@ -177,7 +177,7 @@ def search_rag(
                 results.append({
                     "doc_id": doc.get("doc_id", ""),
                     "title": doc.get("title", ""),
-                    "content": doc.get("content", ""),
+                    "content": doc.get("content", "")[:200],
                     "score": round(score, 3),
                     "scope": "shared",
                     "client_id": "",

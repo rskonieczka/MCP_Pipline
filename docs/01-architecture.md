@@ -40,7 +40,7 @@ src/pipeline_mcp/
   __init__.py
   server.py              # FastMCP server, rejestracja narzedzi
   config.py              # Konfiguracja (env vars)
-  models.py              # Pydantic modele: Run, Envelope, Station, Manifest
+  models.py              # Pydantic modele: Run, Envelope, Stan, Manifest, RTMEntry, GateHistoryEntry, ClientContext, ClientMemoryEntry, SharedKnowledgeEntry (patrz 3.2)
   envelope.py            # Logika koperty: tworzenie, aktualizacja, walidacja
   checkpoint.py          # Checkpointowanie plikowe YAML
   manifest.py            # Zarzadzanie manifestem run'u

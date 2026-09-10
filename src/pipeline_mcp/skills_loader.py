@@ -90,22 +90,6 @@ def list_available_skills() -> list[str]:
     return list(STATIONS.keys())
 
 
-def get_pipeline_spec() -> str:
-    """Zwraca wbudowana specyfikacje pipeline'u (pipeline_sklills.md)."""
-    path = _get_skills_dir() / "pipeline_sklills.md"
-    if not path.exists():
-        raise SkillNotFoundError(f"Specyfikacja pipeline'u nie istnieje: {path}")
-    return path.read_text(encoding="utf-8")
-
-
-def get_contracts_spec() -> str:
-    """Zwraca wbudowane kontrakty I/O (kontrakty_pipelines.md)."""
-    path = _get_skills_dir() / "kontrakty_pipelines.md"
-    if not path.exists():
-        raise SkillNotFoundError(f"Kontrakty nie istnieja: {path}")
-    return path.read_text(encoding="utf-8")
-
-
 def verify_skills_integrity() -> list[str]:
     """Weryfikuje integralnosc wbudowanych skilli. Zwraca liste bledow."""
     errors: list[str] = []

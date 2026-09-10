@@ -89,23 +89,6 @@ def get_next_station(
     return sequence[idx + 1]
 
 
-def get_skipped_stations(path: str) -> list[str]:
-    """Zwraca stacje pomijane w sciezce."""
-    sequence = get_station_sequence(path)
-    return [s for s in ALL_STATIONS if s not in sequence]
-
-
-def get_path_stations(path: str) -> list[str]:
-    """Zwraca liste stacji dla sciezki (alias get_station_sequence)."""
-    return get_station_sequence(path)
-
-
-def is_last_station(station: str, path: str) -> bool:
-    """Sprawdza czy stacja jest ostatnia w sciezce."""
-    sequence = get_station_sequence(path)
-    return sequence[-1] == station if sequence else False
-
-
 def is_station_in_path(station: str, path: str) -> bool:
     """Sprawdza czy stacja jest w sciezce."""
     return station in get_station_sequence(path)

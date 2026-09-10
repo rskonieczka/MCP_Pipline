@@ -133,51 +133,7 @@ class Manifest(BaseModel):
     client_id: str = ""
 
 
-# --- Run ---
-
-
-class Run(BaseModel):
-    """Run pipeline'u."""
-
-    run_id: str
-    zamiar: str
-    kontekst: str = ""
-    sciezka: Sciezka = "pelny"
-    status: RunStatus = "w_trakcie"
-    manifest: Manifest | None = None
-    envelope: Envelope | None = None
-    # MT: identyfikator klienta dla izolacji wieloklientowej (pusty = tryb legacy)
-    client_id: str = ""
-
-
 # --- Wyniki narzedzi ---
-
-
-class StartRunResult(BaseModel):
-    run_id: str
-    first_station: str
-    manifest_path: str
-    envelope: dict[str, Any]
-
-
-class ExecuteStationResult(BaseModel):
-    run_id: str
-    station: str
-    status: StationStatus
-    next_station: str | None = None
-    envelope_summary: dict[str, Any]
-    validation: Walidacja
-    checkpoint_path: str
-    memgraph_written: bool = False
-
-
-class NextStationResult(BaseModel):
-    run_id: str
-    next_station: str | None
-    sciezka: Sciezka
-    reason: str
-    gate_iteration: int
-    is_last_station: bool
 
 
 class QualityGateResult(BaseModel):
@@ -200,16 +156,6 @@ class ContractValidationResult(BaseModel):
     akcja_naprawcza: str
 
 
-class StationContract(BaseModel):
-    station: str
-    phase: str
-    required_input: list[str]
-    optional_input: list[str]
-    output: list[str]
-    mapping_from_previous: list[dict[str, Any]]
-    skill_prompt: str
-
-
 class AutoPilotStatus(BaseModel):
     run_id: str
     status: Literal["uruchomiony", "zakonczony", "zatrzymany", "zablokowany"]
@@ -218,8 +164,6 @@ class AutoPilotStatus(BaseModel):
     stacje_pozostale: list[str]
     iteracja_bramki: int
     bledy: list[str]
-    ostatni_llm_koszt: dict[str, Any] | None = None
-    laczny_koszt: dict[str, Any] | None = None
 
 
 # --- Klient (multi-tenant) ---
@@ -353,3 +297,7 @@ class AmbiguousClientError(PipelineError):
 
 class ClientIdMismatchError(PipelineError):
     code = "CLIENT_ID_MISMATCH"
+
+
+class InvalidClientIdError(PipelineError):
+    code = "INVALID_CLIENT_ID"

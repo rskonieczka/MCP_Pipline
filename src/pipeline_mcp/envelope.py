@@ -105,13 +105,6 @@ def serialize_envelope(envelope: Envelope) -> str:
     )
 
 
-def deserialize_envelope(yaml_str: str) -> Envelope:
-    """Deserializuje koperte z YAML."""
-    import yaml
-    data = yaml.safe_load(yaml_str)
-    return Envelope(**data)
-
-
 def get_envelope_summary(envelope: Envelope) -> dict[str, Any]:
     """Zwraca skrot koperty do wynikow narzedzi."""
     return {

@@ -533,7 +533,7 @@ Wszystkie narzedzia zwracaja bledy przez mechanizm MCP error response:
 | `CLIENT_ALREADY_EXISTS` | Klient o podanym `client_id` juz zarejestrowany |
 | `AMBIGUOUS_CLIENT` | Zapytanie dopasowuje wiecej niz jednego klienta |
 | `CLIENT_ID_MISMATCH` | Run nalezy do innego klienta niz podany w wywolaniu |
-| `INVALID_CLIENT_ID` | `client_id` niezgodny z regex `^[a-z0-9][a-z0-9-]*[a-z0-9]$` |
+| `INVALID_CLIENT_ID` | `client_id` niezgodny z regex `^[a-z0-9][a-z0-9-]*[a-z0-9]$` (rzucany przez `validate_client_id` jako `InvalidClientIdError`) |
 
 ## 8. Zarzadzanie klientami (multi-tenant)
 
@@ -652,7 +652,7 @@ search_shared_knowledge(
     query: str,
     category: str = "",
     workspace: str = ""
-) -> [{ knowledge_id, category, title, content, ... }]
+) -> [{ knowledge_id, category, title, source, tags, path }]
 
 list_shared_knowledge(
     category: str = "",
@@ -708,14 +708,17 @@ get_client_memory(
 list_client_memories(
     client_id: str = "",
     workspace: str = ""
-) -> [{ memory_id, topic, content, scope, client_id, timestamp, tags }]
+) -> [{ memory_id, topic, tags, timestamp }]
 
 search_client_memories(
     query: str,
     client_id: str = "",
     include_shared: bool = True,
     workspace: str = ""
-) -> [{ memory_id, topic, scope, client_id, timestamp, tags }]
+) -> [{ memory_id, topic, content, scope, client_id, tags }]
+```
+
+`content` jest obciete do 200 znakow.
 ```
 
 ## 11. RAG per-klient
@@ -732,7 +735,7 @@ index_client_document(
     metadata: dict = {},     # opcjonalne: metadane dokumentu
     client_id: str = "",     # opcjonalny (pusty = RAG wspoldzielony)
     workspace: str = ""
-) -> { doc_id, indexed: True }
+) -> { doc_id, scope, client_id, indexed: True, total_docs: int }
 ```
 
 ### 11.2. search_client_rag / search_shared_rag / list_rag_documents
@@ -743,18 +746,18 @@ search_client_rag(
     client_id: str = "",
     limit: int = 10,
     workspace: str = ""
-) -> [{ doc_id, score, snippet }]
+) -> [{ doc_id, title, content, score, scope, client_id, metadata }]
 
 search_shared_rag(
     query: str,
     limit: int = 10,
     workspace: str = ""
-) -> [{ doc_id, score, snippet }]
+) -> [{ doc_id, title, content, score, scope, client_id, metadata }]
 
 list_rag_documents(
     client_id: str = "",
     workspace: str = ""
-) -> [{ doc_id, metadata }]
+) -> [{ doc_id, title, scope, indexed_at }]
 ```
 
 ## Narzedzia pomocnicze

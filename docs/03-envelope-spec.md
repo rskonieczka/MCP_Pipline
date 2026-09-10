@@ -239,7 +239,10 @@ Operacje na kopercie w `envelope.py`:
 - `create_envelope(run_id, zamiar, sciezka, client_id)` - inicjalna koperta
 - `update_station_fields(envelope, station, output)` - aktualizacja `pola_stacji.<station>`
 - `accumulate_state(envelope, station, output)` - kumulacja pol w `stan`
-- `validate_transition(envelope, target_station)` - walidacja przed przejsciem
+- `add_station_relations(envelope, station, run_id)` - dodanie relacji `zawiera` i `nastapila_po` (z `client_id` w node IDs)
 - `compress_envelope(envelope, keep_last_n=3)` - kompresja w sciezce doglebny
+- `get_envelope_summary(envelope)` - skrot koperty do wynikow narzedzi
 - `serialize_envelope(envelope)` - serializacja do YAML
 - `deserialize_envelope(yaml_str)` - deserializacja z YAML
+
+Walidacja kontraktow przed przejsciem do stacji nastepnej odbywa sie w `contracts.py` przez `validate_input(target_station, envelope)`, nie w `envelope.py`.

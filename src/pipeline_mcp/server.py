@@ -453,6 +453,7 @@ def close_run(run_id: str, workspace: str = "", client_id: str = "") -> dict[str
         "envelope_final_path": envelope_path,
         "stacje_wykonane": len([s for s in manifest.stacje if s.status == "zakonczona"]),
         "iteracje_bramki": manifest.iteracja_bramki,
+        "already_closed": False,
     }
 
 

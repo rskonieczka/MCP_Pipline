@@ -186,7 +186,7 @@ Agent powinien widziec narzedzia:
 - get_station_contract
 - get_envelope
 - quality_gate
-- save_checkpoint
+- save_checkpoint_tool
 - auto_pilot_start
 - ...
 ```
