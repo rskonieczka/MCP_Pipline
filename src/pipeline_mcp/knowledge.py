@@ -45,12 +45,21 @@ def _atomic_yaml_dump(path: Path, data: dict[str, Any]) -> None:
 
 def _category_dir(category: str, workspace: str | None = None) -> Path:
     """Zwraca katalog dla kategorii wiedzy."""
+    # W1: kategoria wchodzi w sklad sciezki - whitelist (wczesniej walidowana
+    # tylko przy zapisie; odczyt i wyszukiwanie akceptowaly dowolna wartosc)
+    if category not in _CATEGORIES:
+        raise ValueError(
+            f"Nieprawidlowa kategoria '{category}'. Dostepne: {list(_CATEGORIES)}"
+        )
     config = get_config()
     return config.shared_knowledge_dir(workspace) / f"{category}s"
 
 
 def _knowledge_path(knowledge_id: str, category: str, workspace: str | None = None) -> Path:
     """Zwraca sciezke pliku wiedzy."""
+    from .config import validate_path_segment
+    # W1: knowledge_id wchodzi w sklad nazwy pliku - walidacja przed traversal
+    validate_path_segment("knowledge_id", knowledge_id)
     return _category_dir(category, workspace) / f"{knowledge_id}.yaml"
 
 

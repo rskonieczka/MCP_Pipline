@@ -2,8 +2,39 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# W1: segmenty sciezki (run_id, client_id, station, memory_id, ...) - ochrona
+# przed path traversal. Whitelist: litery, cyfry, podkreslenia, myslniki.
+_SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]*$")
+_SAFE_SUFFIX_RE = re.compile(r"^[A-Za-z0-9_-]*$")
+
+
+def validate_path_segment(name: str, value: str) -> None:
+    """Waliduje pojedynczy segment sciezki. Rzuca InvalidPathError.
+
+    Odrzuca wartosci puste, zawierajace separatory sciezek ('/', '\\\\')
+    lub sekwencje '..'. Stosowane do run_id, client_id, station, memory_id,
+    knowledge_id i innych identyfikatorow wchodzacych w sklad sciezek.
+    """
+    from .models import InvalidPathError
+    if not value or not _SAFE_SEGMENT_RE.fullmatch(value):
+        raise InvalidPathError(
+            f"Nieprawidlowy {name}: '{value}'. "
+            "Dozwolone: [A-Za-z0-9_-], bez separatorow sciezek i '..'."
+        )
+
+
+def _validate_suffix(suffix: str) -> None:
+    """Waliduje sufiks nazwy pliku checkpointu (moze byc pusty)."""
+    from .models import InvalidPathError
+    if not _SAFE_SUFFIX_RE.fullmatch(suffix):
+        raise InvalidPathError(
+            f"Nieprawidlowy suffix checkpointu: '{suffix}'. "
+            "Dozwolone: [A-Za-z0-9_-]."
+        )
 
 
 # Polozenie tego pliku - uzywane do autodetekcji workspace (patrz _detect_workspace).
@@ -162,6 +193,7 @@ class Config:
         base = self._workspace_base(workspace)
 
         if client_id:
+            validate_path_segment("client_id", client_id)
             return base / ".ai-kb" / "clients" / client_id / "pipeline-runs"
 
         return base / ".ai-kb" / "pipeline-runs"
@@ -173,23 +205,48 @@ class Config:
         return runs_dir
 
     def run_dir(self, run_id: str, workspace: str | None = None, client_id: str = "") -> Path:
-        """Zwraca sciezke katalogu run'u."""
+        """Zwraca sciezke katalogu run'u (scisle - bez fallbacku legacy)."""
+        validate_path_segment("run_id", run_id)
         return self.runs_dir_for(workspace, client_id) / run_id
 
+    def resolve_run_dir(self, run_id: str, workspace: str | None = None, client_id: str = "") -> Path:
+        """Rozwiazuje katalog run'u z fallbackiem do trybu legacy.
+
+        W2 (A2): gdy client_id niepuste a run nie istnieje w katalogu klienta,
+        sprawdza katalog legacy - umozliwia dostep do run'ow legacy przy
+        ustawionym aktywnym kliencie. Gdy run nie istnieje nigdzie, zwraca
+        sciezke kliencka (komunikat bledu wskazuje tam, gdzie szukano).
+        """
+        if client_id:
+            client_dir = self.run_dir(run_id, workspace, client_id)
+            if (client_dir / "manifest.yaml").exists():
+                return client_dir
+            legacy_dir = self.run_dir(run_id, workspace, "")
+            if (legacy_dir / "manifest.yaml").exists():
+                return legacy_dir
+            return client_dir
+        return self.run_dir(run_id, workspace, client_id)
+
     def manifest_path(self, run_id: str, workspace: str | None = None, client_id: str = "") -> Path:
-        """Zwraca sciezke manifestu run'u."""
+        """Zwraca sciezke manifestu run'u (scisle - bez fallbacku legacy)."""
         return self.run_dir(run_id, workspace, client_id) / "manifest.yaml"
+
+    def resolve_manifest_path(self, run_id: str, workspace: str | None = None, client_id: str = "") -> Path:
+        """Zwraca sciezke manifestu z fallbackiem legacy (W2)."""
+        return self.resolve_run_dir(run_id, workspace, client_id) / "manifest.yaml"
 
     def checkpoint_path(
         self, run_id: str, station: str, suffix: str = "", workspace: str | None = None,
         client_id: str = "",
     ) -> Path:
         """Zwraca sciezke checkpointu stacji."""
-        return self.run_dir(run_id, workspace, client_id) / f"stan_{station}{suffix}.yaml"
+        validate_path_segment("station", station)
+        _validate_suffix(suffix)
+        return self.resolve_run_dir(run_id, workspace, client_id) / f"stan_{station}{suffix}.yaml"
 
     def envelope_final_path(self, run_id: str, workspace: str | None = None, client_id: str = "") -> Path:
         """Zwraca sciezke ostatecznej koperty."""
-        return self.run_dir(run_id, workspace, client_id) / "envelope_final.yaml"
+        return self.resolve_run_dir(run_id, workspace, client_id) / "envelope_final.yaml"
 
     # MT: sciezki per-klient
 
@@ -200,6 +257,7 @@ class Config:
 
     def client_dir(self, client_id: str, workspace: str | None = None) -> Path:
         """Zwraca katalog pojedynczego klienta."""
+        validate_path_segment("client_id", client_id)
         return self.clients_dir(workspace) / client_id
 
     def client_context_path(self, client_id: str, workspace: str | None = None) -> Path:

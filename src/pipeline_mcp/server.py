@@ -94,15 +94,15 @@ def _resolve_client_id(explicit: str = "") -> str:
     2. Aktywny klient sesji (_active_client_id)
     3. PIPELINE_DEFAULT_CLIENT_ID (env var)
     4. Pusty string (tryb legacy)
+
+    W1: rozstrzygniety client_id jest walidowany formatem slug -
+    chroni przed path traversal przez parametry narzedzi przyjmujace
+    surowy client_id (index_client_document, save_client_memory, ...).
     """
-    if explicit:
-        return explicit
-    if _active_client_id:
-        return _active_client_id
-    config = get_config()
-    if config.default_client_id:
-        return config.default_client_id
-    return ""
+    cid = explicit or _active_client_id or get_config().default_client_id or ""
+    if cid:
+        client_registry.validate_client_id(cid)
+    return cid
 
 
 def _ws(workspace: str) -> str | None:
@@ -259,6 +259,8 @@ def start_run(
     # Utworz manifest (sciezka domyslnie pelny, inicjuj ustali ostateczna)
     manifest = create_manifest(run_id, zamiar, sciezka="pelny", client_id=cid)
     manifest = add_station_to_manifest(manifest, "inicjuj", "w_trakcie")
+    # Scisla sciezka (bez fallbacku legacy) - nowy run zapisujemy zawsze
+    # do katalogu rozstrzygnietego klienta, nie do legacy
     save_manifest(manifest, config.manifest_path(run_id, ws, cid))
 
     # Utworz pusta koperte
@@ -301,7 +303,7 @@ def get_run_status(run_id: str, workspace: str = "", client_id: str = "") -> dic
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
 
     return {
@@ -385,7 +387,7 @@ def resume_run(run_id: str, workspace: str = "", client_id: str = "") -> dict[st
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
@@ -426,7 +428,7 @@ def close_run(run_id: str, workspace: str = "", client_id: str = "") -> dict[str
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
 
     if manifest.status_runu == "zakonczony":
@@ -444,7 +446,7 @@ def close_run(run_id: str, workspace: str = "", client_id: str = "") -> dict[str
 
     envelope_path = save_envelope_final(run_id, envelope, ws, cid)
     manifest = close_manifest(manifest)
-    save_manifest(manifest, config.manifest_path(run_id, ws, cid))
+    save_manifest(manifest, config.resolve_manifest_path(run_id, ws, cid))
 
     from . import memgraph
     memgraph.close_run_node(run_id, manifest.timestamp_end or "", manifest.client_id)
@@ -489,7 +491,7 @@ def execute_station(
         raise StationNotFoundError(f"Stacja '{station}' nie istnieje")
 
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
     if station != "audyt_runu":
         _ensure_run_open(manifest)
@@ -540,7 +542,7 @@ def execute_station(
         envelope = compress_envelope(envelope)
 
     manifest = update_station_status(manifest, station, "zakonczona", checkpoint_path)
-    save_manifest(manifest, config.manifest_path(run_id, ws, cid))
+    save_manifest(manifest, config.resolve_manifest_path(run_id, ws, cid))
 
     from . import memgraph
     station_written = memgraph.write_station_node(
@@ -578,7 +580,7 @@ def get_next_station(run_id: str, workspace: str = "", client_id: str = "") -> d
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
 
     last_station = get_last_completed_station(manifest)
@@ -626,7 +628,7 @@ def skip_station(
         raise StationNotFoundError(f"Stacja '{station}' nie istnieje")
 
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
@@ -637,7 +639,7 @@ def skip_station(
         )
 
     manifest = update_station_status(manifest, station, "pominieta")
-    save_manifest(manifest, config.manifest_path(run_id, ws, cid))
+    save_manifest(manifest, config.resolve_manifest_path(run_id, ws, cid))
 
     last_completed = get_last_completed_station(manifest)
     next_station = routing_get_next_station(last_completed or "inicjuj", manifest.sciezka) if last_completed else "inicjuj"
@@ -709,7 +711,7 @@ def get_envelope(run_id: str, workspace: str = "", client_id: str = "") -> dict[
     latest = get_latest_checkpoint(run_id, ws, cid)
     if not latest:
         config = get_config()
-        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
         _ensure_client_id_match(manifest, cid)
         envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
         return envelope.model_dump()
@@ -743,7 +745,7 @@ def update_envelope(
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
@@ -825,7 +827,7 @@ def validate_contract(
     latest = get_latest_checkpoint(run_id, ws, cid)
     if not latest:
         config = get_config()
-        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
         _ensure_client_id_match(manifest, cid)
         envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
     else:
@@ -860,7 +862,7 @@ def get_rtm(run_id: str, workspace: str = "", client_id: str = "") -> dict[str, 
     latest = get_latest_checkpoint(run_id, ws, cid)
     if not latest:
         config = get_config()
-        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
         _ensure_client_id_match(manifest, cid)
         envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
     else:
@@ -895,14 +897,17 @@ def update_rtm(
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
     latest = get_latest_checkpoint(run_id, ws, cid)
     envelope = latest[1] if latest else create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
 
-    entry = rtm_update_entry(envelope, req_id, updates)
+    try:
+        entry = rtm_update_entry(envelope, req_id, updates)
+    except ValueError as e:
+        raise PipelineError(str(e))
     if entry is None:
         raise PipelineError(f"Wpis RTM o req_id='{req_id}' nie istnieje w run'u {run_id}")
 
@@ -948,7 +953,7 @@ def add_rtm_entry(
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
@@ -999,7 +1004,7 @@ def validate_rtm_coverage(run_id: str, workspace: str = "", client_id: str = "")
     latest = get_latest_checkpoint(run_id, ws, cid)
     if not latest:
         config = get_config()
-        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
         _ensure_client_id_match(manifest, cid)
         envelope = create_envelope(run_id, manifest.zamiar, manifest.sciezka, manifest.client_id)
     else:
@@ -1041,12 +1046,21 @@ def quality_gate(
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
+    # W3 (A3): bramka wymaga zakonczonej stacji sprawdzenie - wczesniej
+    # evaluate_gate dzialal bez audytu (przejdz/eskalacja/powrot byly
+    # mozliwe zaraz po start_run)
+    if get_station_status(manifest, "sprawdzenie") != "zakonczona":
+        raise PipelineError(
+            "Bramka jakosci wymaga zakonczonej stacji 'sprawdzenie'. "
+            "Najpierw wykonaj audyt przez execute_station(run_id, 'sprawdzenie', ...)."
+        )
+
     result = evaluate_gate(run_id, manifest, audit_status, audit_wymiary or {}, loop_target)
-    save_manifest(manifest, config.manifest_path(run_id, ws, cid))
+    save_manifest(manifest, config.resolve_manifest_path(run_id, ws, cid))
 
     return result.model_dump()
 
@@ -1066,7 +1080,7 @@ def get_gate_iterations(run_id: str, workspace: str = "", client_id: str = "") -
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
     return get_gate_history(run_id, manifest)
 
@@ -1100,6 +1114,11 @@ def save_checkpoint_tool(
     """
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
+    # W5 (B1): wymagaj istniejacego run'u - zapobiega osieroconym katalogom
+    # i zapisom dla nieistniejacych run'ow
+    config = get_config()
+    if not config.resolve_manifest_path(run_id, ws, cid).exists():
+        raise RunNotFoundError(f"Run '{run_id}' nie istnieje.")
     env = Envelope(**envelope)
     path = save_checkpoint(run_id, station, env, suffix, ws, cid)
     return {
@@ -1128,6 +1147,10 @@ def load_checkpoint_tool(
     """
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
+    # W5 (B1): wymagaj istniejacego run'u
+    config = get_config()
+    if not config.resolve_manifest_path(run_id, ws, cid).exists():
+        raise RunNotFoundError(f"Run '{run_id}' nie istnieje.")
     env = load_checkpoint(run_id, station, suffix, ws, cid)
     return {
         "run_id": run_id,
@@ -1188,7 +1211,7 @@ def auto_pilot_start(
     ws = _ws(workspace)
     cid = _resolve_client_id(client_id)
     config = get_config()
-    manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+    manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
     _ensure_client_id_match(manifest, cid)
     _ensure_run_open(manifest)
 
@@ -1204,7 +1227,7 @@ def auto_pilot_start(
             final_status = "zatrzymany"
             break
 
-        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
         if station is None:
             last = get_last_completed_station(manifest)
             station = routing_get_next_station(last, manifest.sciezka) if last else "inicjuj"
@@ -1234,11 +1257,13 @@ def auto_pilot_start(
         )
         executed.append(station)
 
-        # D1+D2: aktualizuj stacje_pozostale i iteracja_bramki z manifestu
-        manifest = load_manifest(config.manifest_path(run_id, ws, cid))
+        # D1+D2+W8: stacje_pozostale liczone ze statusow manifestu (nie z
+        # listy executed) - po powrocie bramki zresetowane stacje znowu
+        # sa "w_trakcie" i trafia do pozostalych
+        manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
         sequence = get_station_sequence(manifest.sciezka)
-        executed_set = set(executed)
-        remaining = [s for s in sequence if s not in executed_set]
+        done = {s.stacja for s in manifest.stacje if s.status == "zakonczona"}
+        remaining = [s for s in sequence if s not in done]
         auto_pilot.update_auto_pilot_state(
             run_id, station, "zakonczona",
             stacje_pozostale=remaining,
@@ -1254,15 +1279,23 @@ def auto_pilot_start(
             gate = quality_gate(
                 run_id, audit_status, output.get("wymiary") or {}, "", workspace, cid
             )
+            manifest = load_manifest(config.resolve_manifest_path(run_id, ws, cid))
             if gate["gate_decision"] == "eskalacja":
                 final_status = "zablokowany"
                 bledy.append("Bramka jakosci: eskalacja po max iteracjach")
-                manifest = load_manifest(config.manifest_path(run_id, ws, cid))
                 auto_pilot.update_auto_pilot_state(
                     run_id, station, "zablokowany", "eskalacja bramki",
                     iteracja_bramki=manifest.iteracja_bramki,
                 )
                 break
+            # W8 (B4): rekalkulacja po bramce - powrot resetuje stacje
+            done = {s.stacja for s in manifest.stacje if s.status == "zakonczona"}
+            remaining = [s for s in sequence if s not in done]
+            auto_pilot.update_auto_pilot_state(
+                run_id, station, "zakonczona",
+                stacje_pozostale=remaining,
+                iteracja_bramki=manifest.iteracja_bramki,
+            )
             station = gate["next_station"]
         else:
             station = exec_result["next_station"]
@@ -1280,7 +1313,7 @@ def auto_pilot_start(
         "status": final_status,
         "stacje_wykonane": executed,
         "bledy": bledy,
-        "iteracja_bramki": load_manifest(config.manifest_path(run_id, ws, cid)).iteracja_bramki,
+        "iteracja_bramki": load_manifest(config.resolve_manifest_path(run_id, ws, cid)).iteracja_bramki,
     }
 
 

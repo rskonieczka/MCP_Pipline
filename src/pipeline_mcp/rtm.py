@@ -13,6 +13,11 @@ from .models import Envelope, RTMEntry
 
 logger = logging.getLogger(__name__)
 
+# W4: dozwolone statusy RTM (zgodne z RTMStatus w models.py)
+_VALID_RTM_STATUSES = frozenset({
+    "nieadresowane", "adresowane", "zrealizowane", "weryfikowane", "niespelnione"
+})
+
 
 def extract_requirements_from_zmienne(output: dict[str, Any]) -> list[RTMEntry]:
     """Ekstrahuje wymagania z wyjscia stacji zmienne.
@@ -216,6 +221,14 @@ def update_entry(
             for key, value in updates.items():
                 if hasattr(entry, key):
                     if key == "status":
+                        # W4 (A4): walidacja statusu - wczesniej dowolna wartosc
+                        # byla przyjmowana, wpis znikal ze wszystkich kubelkow
+                        # pokrycia w validate_coverage
+                        if value not in _VALID_RTM_STATUSES:
+                            raise ValueError(
+                                f"Nieprawidlowy status RTM '{value}'. "
+                                f"Dostepne: {sorted(_VALID_RTM_STATUSES)}"
+                            )
                         entry.status = value  # type: ignore
                     elif key == "stacje_adresujace" and isinstance(value, list):
                         for s in value:

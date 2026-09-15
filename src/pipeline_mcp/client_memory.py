@@ -55,7 +55,10 @@ def _memory_path(
     memory_id: str, client_id: str, scope: str, workspace: str | None = None
 ) -> Path:
     """Zwraca sciezke pliku pamieci."""
+    from .config import validate_path_segment
     config = get_config()
+    # W1: memory_id wchodzi w sklad nazwy pliku - walidacja przed traversal
+    validate_path_segment("memory_id", memory_id)
     if scope == "shared":
         return config.shared_memory_dir(workspace) / f"{memory_id}.yaml"
     return config.client_memory_dir(client_id, workspace) / f"{memory_id}.yaml"

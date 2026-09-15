@@ -43,29 +43,41 @@ def _req_node_id(run_id: str, req_id: str, client_id: str = "") -> str:
 # Lazy import neo4j
 _driver = None
 _driver_checked = False
+_driver_fail_at: float = 0.0
+# W7 (B3): po nieudanej probie polaczenia kolejne wywolania sa throttlowane
+# tym interwalem, po ktorym nastepuje retry - serwer sam odzyskuje
+# polaczenie gdy Memgraph wstanie pozniej (wczesniej porazka byla
+# cache'owana na zawsze i wymagala restartu procesu)
+_DRIVER_RETRY_INTERVAL = 60.0
 
 
 def _get_driver():
     """Zwraca sterownik neo4j (lazy init). None jesli niedostepny."""
-    global _driver, _driver_checked
-    if _driver_checked:
+    global _driver, _driver_checked, _driver_fail_at
+    if _driver is not None:
         return _driver
-    _driver_checked = True
+    if _driver_checked:
+        import time
+        if time.monotonic() - _driver_fail_at < _DRIVER_RETRY_INTERVAL:
+            return None
 
     config = get_config()
     if not config.memgraph_enabled:
+        _driver_checked = True
         logger.info("Memgraph wylaczony przez konfiguracje")
         return None
 
     try:
         from neo4j import GraphDatabase
-        _driver = GraphDatabase.driver(
+        driver = GraphDatabase.driver(
             config.memgraph_url,
             auth=(config.memgraph_user, config.memgraph_password) if config.memgraph_user else None,
         )
         # Test polaczenia
-        with _driver.session() as session:
+        with driver.session() as session:
             session.run("RETURN 1").consume()
+        _driver = driver
+        _driver_checked = True
         logger.info(f"Polaczono z Memgraph: {config.memgraph_url}")
     except ImportError:
         logger.warning("Pakiet neo4j nie zainstalowany. Memgraph niedostepny.")
@@ -73,6 +85,11 @@ def _get_driver():
     except Exception as e:
         logger.warning(f"Memgraph niedostepny: {e}")
         _driver = None
+
+    if _driver is None:
+        _driver_checked = True
+        import time
+        _driver_fail_at = time.monotonic()
 
     return _driver
 

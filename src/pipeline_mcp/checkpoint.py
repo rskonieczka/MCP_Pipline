@@ -82,7 +82,7 @@ def load_checkpoint(
 def list_checkpoints(run_id: str, workspace: str | None = None, client_id: str = "") -> list[dict]:
     """Lista wszystkich checkpointow dla run'u."""
     config = get_config()
-    run_dir = config.run_dir(run_id, workspace, client_id)
+    run_dir = config.resolve_run_dir(run_id, workspace, client_id)
 
     if not run_dir.exists():
         return []
@@ -123,7 +123,7 @@ def get_latest_checkpoint(
     """
     from .manifest import load_manifest
     config = get_config()
-    manifest_path = config.manifest_path(run_id, workspace, client_id)
+    manifest_path = config.resolve_manifest_path(run_id, workspace, client_id)
 
     if manifest_path.exists():
         manifest = load_manifest(manifest_path)

@@ -28,7 +28,9 @@ FIELD_MAPPING: dict[tuple[str, str], tuple[str, str, str]] = {
     ("analiza", "ZRODLA"): ("zmienne", "sources_used", "bezposrednie"),
 
     # analiza -> dekompozycja
-    ("dekompozycja", "PROBLEM_LUB_CEL_ZLOZONY"): ("analiza", "wnioski+ograniczenia", "wnioskowane"),
+    # W6 (B2): klucz "wnioski+ograniczenia" nigdy nie resolve'owal (get po
+    # literalnym kluczu) - mapowanie na realne pole wnioski
+    ("dekompozycja", "PROBLEM_LUB_CEL_ZLOZONY"): ("analiza", "wnioski", "wnioskowane"),
     ("dekompozycja", "OGRANICZENIA"): ("analiza", "ograniczenia", "bezposrednie"),
     ("dekompozycja", "KONTEKST"): ("analiza", "raport_streszczenie", "wnioskowane"),
 
