@@ -4,7 +4,7 @@ Samodzielny serwer MCP orkiestrujacy dzialanie agentow AI w petli pipeline. Serw
 
 ## Cel
 
-Zmaterializowanie pipeline'u umiejetnosci (13 stacji: inicjuj, zmienne, analiza, dekompozycja, dobierz, routing, planuj, realizuj, weryfikacja, sprawdzenie, ewaluacja, utrwal, monitoruj, audyt_runu) jako infrastruktury operacyjnej z:
+Zmaterializowanie pipeline'u umiejetnosci (13 stacji pipeline: inicjuj, zmienne, analiza, dekompozycja, dobierz, routing, planuj, realizuj, weryfikacja, sprawdzenie, ewaluacja, utrwal, monitoruj; dodatkowo stacja `audyt_runu` do weryfikacji ex-post) jako infrastruktury operacyjnej z:
 
 - trwalym stanem run'u (koperta YAML + checkpointy),
 - walidacja kontraktow I/O miedzy stacjami,
@@ -78,7 +78,7 @@ execute_station(run_id, station="zmienne", output={...})
 
 ### Tryb auto-pilot (opcjonalny)
 
-Serwer sam wywoluje LLM per stacja z odpowiednim promptem skilla. Agent inicjuje i monitoruje.
+Serwer sam wywoluje LLM per stacja z odpowiednim promptem skilla. Agent inicjuje i monitoruje. Obslugiwani dostawcy: `openai`, `anthropic`, `local` (Ollama lub endpoint zgodny z OpenAI API - patrz `PIPELINE_LLM_PROVIDER`).
 
 ```python
 auto_pilot_start(run_id, from_station="inicjuj")
@@ -123,7 +123,7 @@ Dodaj do `~/.config/devin/mcp_config.json`:
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/EVILLAGE/pipeline-mcp",
+        "git+https://github.com/rskonieczka/MCP_Pipline",
         "pipeline-mcp"
       ],
       "env": {
@@ -158,13 +158,38 @@ Alternatywnie, uruchomienie lokalne z katalogu projektu (development):
 
 Szczegoly konfiguracji: `docs/09-configuration.md`.
 
+## Prompty MCP
+
+Oprocz narzedzi serwer wystawia dwa prompty ulatwiajace start pracy agenta:
+
+- `pipeline_start(zamiar, kontekst, zrodla, workspace, client_id)` - rozpoczyna nowy run (wywoluje `start_run`) i zwraca instrukcje do pierwszej stacji,
+- `pipeline_continue(run_id, workspace, client_id)` - wznawia istniejacy run i zwraca kontekst wraz z nastepna stacja.
+
+## Wieloklientowosc (multi-tenant)
+
+Runy, pamiec AI, RAG i wiedza moga byc izolowane per klient:
+
+- `register_client` / `resolve_client` / `set_active_client` - rejestracja i aktywacja klienta,
+- runy klienta zapisywane w `.ai-kb/clients/<client_id>/pipeline-runs/`,
+- bez aktywnego klienta serwer dziala w trybie legacy (`.ai-kb/pipeline-runs/`).
+
 ## Szybki start
 
-1. Utworz run: `start_run(zamiar="Twoj cel")`
+1. Utworz run: `start_run(zamiar="Twoj cel")` (lub prompt `pipeline_start`)
 2. Sprawdz pierwsza stacje: `get_next_station(run_id)`
 3. Wykonaj stacje (manual) lub uruchom auto-pilot
 4. Po `sprawdzenie` sprawdz bramke jakosci: `quality_gate(run_id, audit_status)`
 5. Kontynuuj do zamkniecia: `close_run(run_id)`
+
+## Development
+
+```bash
+# Instalacja developerska (z zaleznosciami testowymi)
+pip install -e ".[dev]"
+
+# Testy
+pytest
+```
 
 ## Dokumentacja
 
@@ -195,4 +220,4 @@ Pliki te sa kopia oryginalow z `/etc/windsurf/skills/` i stanowia czesc pakietu.
 
 ## Licencja
 
-Wewnetrzny projekt EVILLAGE.
+MIT (zgodnie z `pyproject.toml`). Autor: EVILLAGE.
