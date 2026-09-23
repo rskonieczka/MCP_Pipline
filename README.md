@@ -1,28 +1,30 @@
 # Pipeline MCP Server
 
-Samodzielny serwer MCP orkiestrujacy dzialanie agentow AI w petli pipeline. Serwer jest w pelni self-contained - zawiera wbudowane skille wszystkich 13 stacji, kontrakty I/O i specyfikacje pipeline'u. Nie zalezy od zewnetrznych katalogow skilli.
+Każda praca z agentem AI niesie odrobinę niepewności: raz zadanie wychodzi wzorowo, innym razem ta sama prośba prowadzi w nieznanym kierunku. Gdy korzysta się z takiego wsparcia codziennie, zaczyna brakować jednego: ścieżki, którą agent przejdzie zawsze tak samo, krok po kroku, z możliwością zajrzenia w każde miejsce. Właśnie taką ścieżką jest ten serwer.
+
+Pipeline MCP Server to samodzielny serwer MCP orkiestrujący pracę agentów AI w pętli pipeline'u: od zrozumienia zadania, przez analizę i planowanie, aż po realizację, sprawdzenie efektu i utrwalenie wniosków. MCP (Model Context Protocol) to otwarty standard łączenia modeli językowych z zewnętrznymi narzędziami. Agent rozmawia z serwerem właśnie w tym protokole i widzi go jako zestaw narzędzi, po które może sięgać w trakcie pracy. Serwer jest przy tym w pełni samodzielny: prompty wszystkich stacji, kontrakty między nimi i specyfikacja ścieżek są wbudowane w pakiet, więc nie zależy on od żadnych zewnętrznych katalogów umiejętności.
 
 ## Cel
 
-Zmaterializowanie pipeline'u umiejetnosci (13 stacji pipeline: inicjuj, zmienne, analiza, dekompozycja, dobierz, routing, planuj, realizuj, weryfikacja, sprawdzenie, ewaluacja, utrwal, monitoruj; dodatkowo stacja `audyt_runu` do weryfikacji ex-post) jako infrastruktury operacyjnej z:
+Pipeline umiejętności to sprawdzony sposób prowadzenia pracy: trzynaście stacji ułożonych w spójną trasę, z których każda wie, czego oczekiwać od poprzedniej. Kolejno są to: inicjuj, zmienne, analiza, dekompozycja, dobierz, routing, planuj, realizuj, weryfikacja, sprawdzenie, ewaluacja, utrwal i monitoruj. Obok nich funkcjonuje stacja `audyt_runu`, która po zakończeniu pracy weryfikuje spójność całego uruchomienia. Serwer przekształca tę koncepcję w działającą infrastrukturę z:
 
-- trwalym stanem run'u (koperta YAML + checkpointy),
-- walidacja kontraktow I/O miedzy stacjami,
-- bramka jakosci z max 2 iteracjami i eskalacja,
-- 3 sciezkami routing'u (szybki, pelny, doglebny),
-- restartowalnoscia od dowolnej stacji,
-- audytowalnoscia przez Memgraph,
-- opcjonalnym trybem auto-pilot (serwer wywoluje LLM per stacja).
+- trwałym stanem uruchomienia: kopertą YAML przenoszącą dane między stacjami oraz punktami kontrolnymi, które przetrwają przerwę i restart,
+- walidacją kontraktów wejścia-wyjścia między stacjami: kolejna stacja nie ruszy dalej, jeśli poprzednia nie dostarczyła uzgodnionych danych,
+- bramką jakości z maksymalnie dwiema iteracjami poprawkowymi i eskalacją do człowieka,
+- trzema ścieżkami routingu: szybką (5 stacji), pełną (9 stacji) i dogłębną (13 stacji), dobieranymi do złożoności zadania,
+- możliwością wznowienia pracy od dowolnej stacji,
+- audytowalnością przez bazę grafową Memgraph,
+- opcjonalnym trybem autopilota, w którym serwer sam wywołuje model językowy dla każdej stacji.
 
-## Architektura w skrocie
+## Architektura w skrócie
 
 ```
 [Agent AI] <--MCP--> [Pipeline MCP Server]
                          |
            +-------------+-------------+
            |             |             |
-     [Zarzadzanie    [Koperta +    [Bramka
-      run'em]        checkpointy]  jakosci]
+     [Zarządzanie    [Koperta +    [Bramka
+      run'em]        checkpointy]  jakości]
            |             |             |
            +-------------+-------------+
                          |
@@ -37,80 +39,84 @@ Zmaterializowanie pipeline'u umiejetnosci (13 stacji pipeline: inicjuj, zmienne,
           checkpointy)
 ```
 
-Serwer wystawia narzedzia MCP podzielone na 11 grup:
+Diagram czyta się od góry. Agent AI (na przykład Devin albo Windsurf) rozmawia z serwerem przez MCP. Serwer dba jednocześnie o trzy rzeczy: prowadzi uruchomienia, opiekuje się kopertą danych wraz z punktami kontrolnymi i pilnuje bramki jakości. Wszystko, co zapisze, trafia do plików YAML na dysku, a gdy w systemie działa Memgraph, dodatkowo do grafu relacji. Dzięki temu po przerwaniu pracy zawsze można wrócić dokładnie tam, gdzie się skończyło.
 
-1. **Run management** - `start_run`, `get_run_status`, `list_runs`, `resume_run`, `close_run`
-2. **Station execution** - `execute_station`, `get_next_station`, `skip_station`, `get_station_contract`
-3. **Envelope management** - `get_envelope`, `update_envelope`, `validate_contract`
-4. **Quality gate** - `quality_gate`, `get_gate_iterations`
-5. **Checkpointing** - `save_checkpoint_tool`, `load_checkpoint_tool`, `list_checkpoints_tool`
-6. **Auto-pilot** - `auto_pilot_start`, `auto_pilot_status`, `auto_pilot_stop`
-7. **RTM (Requirements Traceability Matrix)** - `get_rtm`, `update_rtm`, `add_rtm_entry`, `validate_rtm_coverage`
-8. **Zarzadzanie klientami (multi-tenant)** - `register_client`, `resolve_client`, `set_active_client`, `get_active_client`, `get_client_info`, `list_clients`, `update_client`, `archive_client`, `delete_client`
-9. **Wiedza wspoldzielona** - `save_shared_knowledge`, `get_shared_knowledge`, `search_shared_knowledge`, `list_shared_knowledge`
-10. **Pamiec AI per-klient** - `save_client_memory`, `get_client_memory`, `list_client_memories`, `save_shared_memory`, `get_shared_memory`, `search_client_memories`
-11. **RAG per-klient** - `index_client_document`, `search_client_rag`, `search_shared_rag`, `list_rag_documents`
+Pojedyncze przejście przez pipeline nazywamy uruchomieniem (w skrócie: run). Narzędzia serwera układają się w 11 grup, a ich kolejność odzwierciedla drogę zadania: najpierw powstaje uruchomienie, potem wykonuje się stacje, w końcu pilnuje się jakości i zamyka pracę.
 
-Dodatkowo narzedzia pomocnicze: `list_stations`, `verify_integrity`.
+1. **Zarządzanie uruchomieniami** - `start_run`, `get_run_status`, `list_runs`, `resume_run`, `close_run`
+2. **Wykonywanie stacji** - `execute_station`, `get_next_station`, `skip_station`, `get_station_contract`
+3. **Prowadzenie koperty** - `get_envelope`, `update_envelope`, `validate_contract`
+4. **Bramka jakości** - `quality_gate`, `get_gate_iterations`
+5. **Punkty kontrolne** - `save_checkpoint_tool`, `load_checkpoint_tool`, `list_checkpoints_tool`
+6. **Autopilot** - `auto_pilot_start`, `auto_pilot_status`, `auto_pilot_stop`
+7. **RTM, czyli macierz powiązania wymagań z realizacją** - `get_rtm`, `update_rtm`, `add_rtm_entry`, `validate_rtm_coverage`
+8. **Zarządzanie klientami (wieloklientowość)** - `register_client`, `resolve_client`, `set_active_client`, `get_active_client`, `get_client_info`, `list_clients`, `update_client`, `archive_client`, `delete_client`
+9. **Wiedza współdzielona** - `save_shared_knowledge`, `get_shared_knowledge`, `search_shared_knowledge`, `list_shared_knowledge`
+10. **Pamięć AI per klient** - `save_client_memory`, `get_client_memory`, `list_client_memories`, `save_shared_memory`, `get_shared_memory`, `search_client_memories`
+11. **RAG per klient, czyli przeszukiwanie zaindeksowanych dokumentów** - `index_client_document`, `search_client_rag`, `search_shared_rag`, `list_rag_documents`
 
-Szczegolowy opis narzedzi: `docs/02-tools-reference.md`.
+Dodatkowo narzędzia pomocnicze: `list_stations`, `verify_integrity`.
+
+Szczegółowy opis narzędzi: `docs/02-tools-reference.md`.
 
 ## Dwa tryby pracy
 
-### Tryb manual (domyślny)
+Wybór trybu sprowadza się do jednego pytania: ile uwagi chcesz poświęcić prowadzeniu pracy?
 
-Agent AI steruje wykonaniem. Serwer zaradza stanem, waliduje kontrakty, prowadzi przez stacje zwracajac `next_station`, ale nie wywoluje LLM. Agent wywoluje skille (prompty) samodzielnie i zwraca wynik przez `execute_station`.
+### Tryb ręczny (domyślny)
+
+Agent sam prowadzi wykonanie: wypełnia prompty stacji i zwraca wyniki, a serwer pilnuje stanu, waliduje kontrakty i po każdej stacji wskazuje następny krok (`next_station`). Serwer nie wywołuje przy tym żadnego modelu. Ten tryb sprawdza się, gdy chcesz widzieć i kształtować każdy etap.
 
 ```python
-# Agent wywoluje:
-run = start_run(zamiar="Wdroz Filament 5.6.7", kontekst="BIP/Wymagania")
+# Agent tworzy uruchomienie:
+run = start_run(zamiar="Wdróż Filament 5.6.7", kontekst="BIP/Wymagania")
 # -> run_id, first_station="inicjuj"
 
-# Agent wykonuje skilla inicjuj, zwraca wynik:
+# Agent wykonuje stację inicjuj i zwraca wynik:
 execute_station(run_id, station="inicjuj", output={...})
 # -> next_station="zmienne", envelope_updated
 
-# Agent wykonuje skilla zmienne...
+# Agent wykonuje stację zmienne...
 execute_station(run_id, station="zmienne", output={...})
 # -> next_station="analiza"
-# ... itd.
+# ... i tak do końca.
 ```
 
-### Tryb auto-pilot (opcjonalny)
+### Tryb autopilota (opcjonalny)
 
-Serwer sam wywoluje LLM per stacja z odpowiednim promptem skilla. Agent inicjuje i monitoruje. Obslugiwani dostawcy: `openai`, `anthropic`, `local` (Ollama lub endpoint zgodny z OpenAI API - patrz `PIPELINE_LLM_PROVIDER`).
+Gdy zadanie jest rutynowe, prowadzenie można oddać serwerowi. Serwer sam wywołuje model językowy dla każdej stacji, zapisuje punkty kontrolne i obsługuje bramkę jakości; agent jedynie rozpoczyna pracę i obserwuje jej przebieg. Obsługiwani dostawcy: `openai`, `anthropic` oraz `local` (Ollama albo dowolny lokalny serwer zgodny z API OpenAI; wybór reguluje zmienna `PIPELINE_LLM_PROVIDER`).
 
 ```python
 auto_pilot_start(run_id, from_station="inicjuj")
-# Serwer sekwencyjnie wywoluje LLM dla kazdej stacji,
-# zapisuje checkpointy, obsluguje bramke jakosci.
-# Agent moze sprawdzac status:
+# Serwer kolejno wywołuje model dla każdej stacji,
+# zapisuje punkty kontrolne, obsługuje bramkę jakości.
+# Agent może sprawdzić stan:
 auto_pilot_status(run_id)
-# Lub zatrzymac:
+# Albo zatrzymać:
 auto_pilot_stop(run_id)
 ```
 
-Szczegoly: `docs/07-auto-pilot.md`.
+Szczegóły: `docs/07-auto-pilot.md`.
 
-## Samodzielnosc
+## Samodzielność
 
-Serwer jest w pelni self-contained:
+Serwer można uruchomić na dowolnej maszynie z Pythonem 3.11+ i niczego do niego nie dokopiować:
 
-- **Skille wbudowane** - wszystkie 13 stacji (prompty SKILL.md) wbudowane w pakiet, w `src/pipeline_mcp/skills/`. Nie czytane z `/etc/windsurf/skills/`.
-- **Kontrakty wbudowane** - mapowania I/O miedzy stacjami wbudowane w kod (`contracts.py`), nie czytane z zewnetrznego `kontrakty_pipelines.md`.
-- **Specyfikacja wbudowana** - definicje sciezek, bramki, checkpointow wbudowane w kod, nie czytane z zewnetrznego `pipeline_sklills.md`.
-- **Brak zaleznosci plikowych** - serwer mozna uruchomic na dowolnej maszynie z Python 3.11+ bez kopiowania katalogow skilli.
-- **Lokalne dzialanie** - serwer uruchamiany lokalnie przez `uvx` lub `python -m`, agent (Devin/Windsurf w VSCode) laczy sie przez stdio.
+- **umiejętności wbudowane** - prompty wszystkich trzynastu stacji są częścią pakietu (`src/pipeline_mcp/skills/`), serwer nie czyta `/etc/windsurf/skills/`,
+- **kontrakty wbudowane** - mapowania wejść i wyjść między stacjami są w kodzie (`contracts.py`), a nie w zewnętrznym pliku,
+- **specyfikacja wbudowana** - definicje ścieżek, bramki i punktów kontrolnych również żyją w kodzie,
+- **brak zależności plikowych** - nie trzeba przenosić katalogów umiejętności,
+- **praca lokalna** - serwer uruchamia się przez `uvx` albo `python -m`, a agent (Devin albo Windsurf w VSCode) łączy się z nim przez stdio.
 
-Pliki zrodlowe skilli w `src/pipeline_mcp/skills/` sa kopia oryginalow z `/etc/windsurf/skills/` i stanowia czesc pakietu. Aktualizacja skilli wymaga aktualizacji pakietu serwera.
+Pliki umiejętności w `src/pipeline_mcp/skills/` są kopią oryginałów z `/etc/windsurf/skills/` i stanowią część pakietu. Wprowadzenie w nich zmian wymaga wydania nowej wersji pakietu.
 
 ## Instalacja
 
 ### Wymagania
 
-- Python >= 3.11
-- uvx (dostepne w systemie)
-- Opcjonalnie: Memgraph dla warstwy grafowej
+- Python >= 3.11,
+- uvx dostępny w systemie,
+- opcjonalnie: Memgraph dla warstwy grafowej.
 
 ### Konfiguracja w Devin (lokalnie w VSCode)
 
@@ -138,7 +144,7 @@ Dodaj do `~/.config/devin/mcp_config.json`:
 }
 ```
 
-Alternatywnie, uruchomienie lokalne z katalogu projektu (development):
+Alternatywnie, uruchomienie lokalne z katalogu projektu (na czas pracy nad kodem):
 
 ```json
 {
@@ -156,35 +162,37 @@ Alternatywnie, uruchomienie lokalne z katalogu projektu (development):
 }
 ```
 
-Szczegoly konfiguracji: `docs/09-configuration.md`.
+Szczegóły konfiguracji: `docs/09-configuration.md`.
 
 ## Prompty MCP
 
-Oprocz narzedzi serwer wystawia dwa prompty ulatwiajace start pracy agenta:
+Poza narzędziami serwer wystawia dwa prompty, które skracają start pracy:
 
-- `pipeline_start(zamiar, kontekst, zrodla, workspace, client_id)` - rozpoczyna nowy run (wywoluje `start_run`) i zwraca instrukcje do pierwszej stacji,
-- `pipeline_continue(run_id, workspace, client_id)` - wznawia istniejacy run i zwraca kontekst wraz z nastepna stacja.
+- `pipeline_start(zamiar, kontekst, zrodla, workspace, client_id)` - rozpoczyna nowe uruchomienie (wywołuje `start_run`) i zwraca instrukcje do pierwszej stacji,
+- `pipeline_continue(run_id, workspace, client_id)` - wznawia istniejące uruchomienie i zwraca kontekst wraz z kolejną stacją.
 
-## Wieloklientowosc (multi-tenant)
+## Wieloklientowość
 
-Runy, pamiec AI, RAG i wiedza moga byc izolowane per klient:
+Przy prowadzeniu projektów dla kilku klientów liczy się jedno: ich dane nie mogą się mieszać. Serwer izoluje uruchomienia, pamięć AI, RAG i wiedzę współdzieloną per klient:
 
-- `register_client` / `resolve_client` / `set_active_client` - rejestracja i aktywacja klienta,
-- runy klienta zapisywane w `.ai-kb/clients/<client_id>/pipeline-runs/`,
-- bez aktywnego klienta serwer dziala w trybie legacy (`.ai-kb/pipeline-runs/`).
+- `register_client`, `resolve_client` i `set_active_client` odpowiadają za rejestrację i aktywację klienta,
+- uruchomienia klienta zapisują się w `.ai-kb/clients/<client_id>/pipeline-runs/`,
+- bez aktywnego klienta serwer pracuje w trybie starszym (legacy), ze wspólnym katalogiem `.ai-kb/pipeline-runs/` dla wszystkich uruchomień.
 
 ## Szybki start
 
-1. Utworz run: `start_run(zamiar="Twoj cel")` (lub prompt `pipeline_start`)
-2. Sprawdz pierwsza stacje: `get_next_station(run_id)`
-3. Wykonaj stacje (manual) lub uruchom auto-pilot
-4. Po `sprawdzenie` sprawdz bramke jakosci: `quality_gate(run_id, audit_status)`
-5. Kontynuuj do zamkniecia: `close_run(run_id)`
+Nie trzeba wierzyć na słowo. Najlepszy dowód to małe zadanie i pięć kroków:
 
-## Development
+1. Utwórz uruchomienie: `start_run(zamiar="Twój cel")` (albo użyj promptu `pipeline_start`),
+2. Sprawdź pierwszą stację: `get_next_station(run_id)`,
+3. Wykonuj kolejne stacje sam (tryb ręczny) albo uruchom autopilota,
+4. Po stacji `sprawdzenie` przepuść wynik przez bramkę jakości: `quality_gate(run_id, audit_status)`,
+5. Zamknij pracę: `close_run(run_id)`.
+
+## Praca nad kodem
 
 ```bash
-# Instalacja developerska (z zaleznosciami testowymi)
+# Instalacja lokalna (z zależnościami testowymi)
 pip install -e ".[dev]"
 
 # Testy
@@ -195,28 +203,28 @@ pytest
 
 | Plik | Temat |
 |---|---|
-| [docs/01-architecture.md](docs/01-architecture.md) | Architektura, komponenty, przeplyw danych |
-| [docs/02-tools-reference.md](docs/02-tools-reference.md) | Referencja wszystkich narzedzi MCP |
+| [docs/01-architecture.md](docs/01-architecture.md) | Architektura, komponenty, przepływ danych |
+| [docs/02-tools-reference.md](docs/02-tools-reference.md) | Referencja wszystkich narzędzi MCP |
 | [docs/03-envelope-spec.md](docs/03-envelope-spec.md) | Specyfikacja koperty (YAML envelope) |
-| [docs/04-paths-and-routing.md](docs/04-paths-and-routing.md) | Sciezki pipeline'u i routing |
-| [docs/05-quality-gate.md](docs/05-quality-gate.md) | Bramka jakosci i petla zwrotna |
-| [docs/06-checkpointing.md](docs/06-checkpointing.md) | Mechanizm checkpointow i restart |
-| [docs/07-auto-pilot.md](docs/07-auto-pilot.md) | Tryb auto-pilot z LLM |
+| [docs/04-paths-and-routing.md](docs/04-paths-and-routing.md) | Ścieżki pipeline'u i routing |
+| [docs/05-quality-gate.md](docs/05-quality-gate.md) | Bramka jakości i pętla zwrotna |
+| [docs/06-checkpointing.md](docs/06-checkpointing.md) | Mechanizm punktów kontrolnych i restart |
+| [docs/07-auto-pilot.md](docs/07-auto-pilot.md) | Tryb autopilota z modelem językowym |
 | [docs/08-memgraph-integration.md](docs/08-memgraph-integration.md) | Integracja z Memgraph |
 | [docs/09-configuration.md](docs/09-configuration.md) | Konfiguracja i instalacja |
-| [docs/10-stations-builtin.md](docs/10-stations-builtin.md) | Wbudowane skille stacji |
+| [docs/10-stations-builtin.md](docs/10-stations-builtin.md) | Wbudowane umiejętności stacji |
 
-## Zrodla prawdy (wbudowane)
+## Źródła prawdy (wbudowane)
 
-Serwer zawiera wbudowane kopie nastepujacych plikow w `src/pipeline_mcp/skills/`:
+Serwer zawiera wbudowane kopie następujących plików w `src/pipeline_mcp/skills/`:
 
-- `pipeline_sklills.md` - specyfikacja pipeline'u umiejetnosci
-- `kontrakty_pipelines.md` - kontrakty I/O miedzy stacjami
-- `<stacja>/SKILL.md` - specyfikacja kazdej z 13 stacji
-- `_shared/zrodla-i-narzedzia.md` - wspoldzielone zasady zrodel
-- `_shared/graf-pipeline.md` - schemat grafu Memgraph
+- `pipeline_sklills.md` - specyfikacja pipeline'u umiejętności,
+- `kontrakty_pipelines.md` - kontrakty wejścia-wyjścia między stacjami,
+- `<stacja>/SKILL.md` - specyfikacja każdej z trzynastu stacji,
+- `_shared/zrodla-i-narzedzia.md` - wspólne zasady pracy ze źródłami,
+- `_shared/graf-pipeline.md` - schemat grafu Memgraph.
 
-Pliki te sa kopia oryginalow z `/etc/windsurf/skills/` i stanowia czesc pakietu. Serwer nie odczytuje skilli z systemu - wszystkie sa wbudowane.
+Pliki są kopią oryginałów z `/etc/windsurf/skills/` i stanowią część pakietu. Serwer nie odczytuje umiejętności z systemu: wszystkie są wbudowane.
 
 ## Licencja
 
